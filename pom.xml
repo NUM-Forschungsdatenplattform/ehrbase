@@ -48,6 +48,7 @@
         <module>service</module>
         <module>test-coverage</module>
         <module>plugin</module>
+        <module>build-docker-image</module>
     </modules>
 
 
