@@ -40,7 +40,11 @@ import org.springframework.context.annotation.Import;
 @Import({ServiceModuleConfiguration.class, RestEHRScapeModuleConfiguration.class, RestModuleConfiguration.class})
 public class EhrBase {
 
-    public static void main(String[] args) {
-        SpringApplication.run(EhrBase.class, args);
-    }
+  public static void main(String[] args) {
+    createSpringApplication().run(args);
+  }
+
+  public static SpringApplication createSpringApplication() {
+    return new SpringApplication(EhrBase.class);
+  }
 }

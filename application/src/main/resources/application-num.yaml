@@ -1,0 +1,6 @@
+management:
+  server:
+    port: 7979
+  endpoint:
+    health:
+      enabled: true
