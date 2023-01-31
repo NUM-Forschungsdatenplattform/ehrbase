@@ -50,10 +50,6 @@ jobs:
           echo "GITHUB_RUN_ID=$GITHUB_RUN_ID"
           echo "BUILD_VERSION=$BUILD_VERSION"
 
-      - name: Run env
-        run: |
-          env
-
       - name: Echo Env Vars through Context
         run: |
           echo "$GITHUB_CONTEXT"
