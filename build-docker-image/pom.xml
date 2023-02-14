@@ -112,6 +112,13 @@
                 <image>
                   <name>${docker-image-name}</name>
                   <build>
+                    <buildx>
+                      <platforms>
+                        <platform>linux/amd64</platform>
+                        <platform>linux/arm64</platform>
+                        <platform>darwin/amd64</platform>
+                      </platforms>
+                    </buildx>
                     <from>${docker-image-from}</from>
                     <tags>
                       <tag>latest</tag>
