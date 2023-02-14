@@ -47,7 +47,7 @@
 
   <properties>
     <docker-image-from>openjdk:17.0.2-jdk-oracle</docker-image-from>
-    <docker-maven-plugin.version>0.40.2</docker-maven-plugin.version>
+    <docker-maven-plugin.version>0.41.0</docker-maven-plugin.version>
     <docker-image-name>numresearchdataplatform/num-ehrbase</docker-image-name>
   </properties>
 
@@ -116,7 +116,7 @@
                       <platforms>
                         <platform>linux/amd64</platform>
                         <platform>linux/arm64</platform>
-                        <platform>darwin/amd64</platform>
+                        <!--<platform>darwin/amd64</platform>-->
                       </platforms>
                     </buildx>
                     <from>${docker-image-from}</from>
