@@ -21,6 +21,7 @@ import java.io.Serializable;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.ehrbase.api.exception.InternalServerException;
 import org.openehealth.ipf.commons.audit.codes.EventOutcomeIndicator;
 import org.springframework.http.HttpMethod;
@@ -33,6 +34,7 @@ public class OpenEhrAuditDataset implements Serializable {
     private EventOutcomeIndicator eventOutcomeIndicator;
 
     private String eventOutcomeDescription;
+    private String auditEnterpriseSiteId;
 
     private HttpMethod method;
 
@@ -83,7 +85,7 @@ public class OpenEhrAuditDataset implements Serializable {
     }
 
     public Set<String> getPatientParticipantObjectIds() {
-        return patientParticipantObjectIds;
+        return patientParticipantObjectIds.stream().filter(id -> id != null).collect(Collectors.toSet());
     }
 
     public void setPatientParticipantObjectIds(Set<String> patientParticipantObjectIds) {
@@ -98,10 +100,12 @@ public class OpenEhrAuditDataset implements Serializable {
         return patientParticipantObjectIds != null && !patientParticipantObjectIds.isEmpty();
     }
 
+    private static final String MISSING_PAT_ID = "<unknown>";
+
     public String getUniquePatientParticipantObjectId() {
         Set<String> ids = getPatientParticipantObjectIds();
         if (ids.isEmpty()) {
-            return null;
+            return MISSING_PAT_ID;
         } else if (ids.size() == 1) {
             return ids.iterator().next();
         } else {
@@ -111,5 +115,13 @@ public class OpenEhrAuditDataset implements Serializable {
 
     public boolean hasUniqueParticipantObjectIds() {
         return hasPatientParticipantObjectIds() && patientParticipantObjectIds.size() == 1;
+    }
+
+    public String getAuditEnterpriseSiteId() {
+        return auditEnterpriseSiteId;
+    }
+
+    public void setAuditEnterpriseSiteId(String auditEnterpriseSiteId) {
+        this.auditEnterpriseSiteId = auditEnterpriseSiteId;
     }
 }
