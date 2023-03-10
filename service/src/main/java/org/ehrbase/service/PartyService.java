@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ * Copyright (c) 2023 vitasystems GmbH and Hannover Medical School.
  *
  * This file is part of project EHRbase
  *
@@ -15,19 +15,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.ehrbase.api.definitions;
+package org.ehrbase.service;
 
-public enum QueryMode {
-    SQL("sql"),
-    AQL("aql");
+import com.nedap.archie.rm.generic.PartyProxy;
+import java.util.UUID;
 
-    private final String code;
+/**
+ * @author Stefan Spiska
+ */
+public interface PartyService {
 
-    QueryMode(String code) {
-        this.code = code;
-    }
-
-    public String getCode() {
-        return code;
-    }
+    /**
+     * Trys to find a Party matching <code>partyProxy</code> otherwise creates it.
+     *
+     * @param partyProxy
+     * @return {@link UUID} of the corresponding DB object.
+     */
+    UUID findOrCreateParty(PartyProxy partyProxy);
 }

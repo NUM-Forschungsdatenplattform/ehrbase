@@ -28,7 +28,7 @@
     <parent>
         <groupId>org.ehrbase.openehr</groupId>
         <artifactId>server</artifactId>
-        <version>0.24.0-SNAPSHOT</version>
+        <version>0.25.0-SNAPSHOT</version>
     </parent>
 
     <artifactId>jooq-pg</artifactId>
@@ -38,7 +38,7 @@
 
     <properties>
         <license-header.dir>../</license-header.dir>
-        <docker-maven-plugin.version>0.40.2</docker-maven-plugin.version>
+        <docker-maven-plugin.version>0.42.0</docker-maven-plugin.version>
         <database.host>localhost</database.host>
     </properties>
 
@@ -71,21 +71,26 @@
                 <configuration>
                     <images>
                         <image>
-                            <name>ehrbase/ehrbase-postgres:latest</name>
+                            <name>postgres:14</name>
                             <alias>postgres</alias>
                             <run>
                                 <env>
+                                    <TZ>Europe/Berlin</TZ>
                                     <POSTGRES_PASSWORD>postgres</POSTGRES_PASSWORD>
                                     <POSTGRES_USER>postgres</POSTGRES_USER>
-                                    <EHRBASE_USER>ehrbase</EHRBASE_USER>
-                                    <EHRBASE_PASSWORD>ehrbase</EHRBASE_PASSWORD>
+                                    <POSTGRES_DB>postgres</POSTGRES_DB>
                                 </env>
+                                <volumes>
+                                    <bind>
+                                        <volume>./db/init:/docker-entrypoint-initdb.d:ro</volume>
+                                    </bind>
+                                </volumes>
                                 <ports>
                                     <port>${database.port}:${database.port}</port>
                                 </ports>
                                 <wait>
                                     <!--<log>database system is ready to accept connections</log>-->
-                                    <time>20000</time>
+                                    <time>5000</time>
                                 </wait>
                                 <log>
                                     <enabled>true</enabled>
@@ -156,7 +161,7 @@
                     <dependency>
                         <groupId>org.postgresql</groupId>
                         <artifactId>postgresql</artifactId>
-                        <version>${postgressql.version}</version>
+                        <version>${postgresql.version}</version>
                     </dependency>
                 </dependencies>
                 <!-- Specify the plugin configuration.
