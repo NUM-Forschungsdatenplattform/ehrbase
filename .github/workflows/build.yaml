@@ -4,15 +4,15 @@ on:
   push:
     branches:
       - num-main
-      - 'feature/**'
-      - 'feat/**'
-      - 'fix/**'
+      - "feature/**"
+      - "feat/**"
+      - "fix/**"
     paths-ignore:
-      - '.circleci/**'
-      - '.docker_scripts/**'
-      - 'doc/**'
-      - 'tests/**'
-      - '**/*.md'
+      - ".circleci/**"
+      - ".docker_scripts/**"
+      - "doc/**"
+      - "tests/**"
+      - "**/*.md"
 
 jobs:
   build:
@@ -27,18 +27,18 @@ jobs:
       - name: Setup Java
         uses: actions/setup-java@v2
         with:
-          distribution: 'temurin'
-          java-version: '17'
-          cache: 'maven'
+          distribution: "temurin"
+          java-version: "17"
+          cache: "maven"
 
       - name: Set some variables for the build
         run: |
           if [ ${{ github.ref }} != 'refs/heads/num-main' ]; then
             echo "IS NOT num-main branch"
-            echo "BUILD_VERSION=0.25.x-num-$GITHUB_RUN_NUMBER-PR" >> $GITHUB_ENV
+            echo "BUILD_VERSION=0.27.x-num-$GITHUB_RUN_NUMBER-PR" >> $GITHUB_ENV
           else
             echo "IS main branch"
-            echo "BUILD_VERSION=0.25.x-num-$GITHUB_RUN_NUMBER" >> $GITHUB_ENV
+            echo "BUILD_VERSION=0.27.x-num-$GITHUB_RUN_NUMBER" >> $GITHUB_ENV
           fi
         shell: bash
 
@@ -67,4 +67,4 @@ jobs:
         run: ./mvnw verify
 
       - name: Docker push image
-        run: ./mvnw -pl build-docker-image io.fabric8:docker-maven-plugin:0.40.2:push
+        run: ./mvnw -pl build-docker-image io.fabric8:docker-maven-plugin:push
