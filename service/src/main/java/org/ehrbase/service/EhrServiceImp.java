@@ -117,8 +117,8 @@ public class EhrServiceImp extends BaseServiceImp implements EhrService {
     }
 
     private UUID getEmptyPartyByTenant() {
-        String tenantIdentifier = tenantService.getCurrentTenantIdentifier();
-        return new PersistedPartyProxy(getDataAccess()).getOrCreate(new PartySelf(), tenantIdentifier);
+        Short sysTenant = tenantService.getCurrentSysTenant();
+        return new PersistedPartyProxy(getDataAccess()).getOrCreate(new PartySelf(), sysTenant);
     }
 
     @Override
@@ -140,7 +140,7 @@ public class EhrServiceImp extends BaseServiceImp implements EhrService {
             subjectUuid = getEmptyPartyByTenant();
         } else {
             subjectUuid = new PersistedPartyProxy(getDataAccess())
-                    .getOrCreate(status.getSubject(), tenantService.getCurrentTenantIdentifier());
+                    .getOrCreate(status.getSubject(), tenantService.getCurrentSysTenant());
 
             if (I_EhrAccess.checkExist(getDataAccess(), subjectUuid)) {
                 throw new StateConflictException(
@@ -153,7 +153,7 @@ public class EhrServiceImp extends BaseServiceImp implements EhrService {
 
         try { // this try block sums up a bunch of operations that can throw errors in the following
             I_EhrAccess ehrAccess = I_EhrAccess.getInstance(
-                    getDataAccess(), subjectUuid, systemId, null, ehrId, tenantService.getCurrentTenantIdentifier());
+                    getDataAccess(), subjectUuid, systemId, null, ehrId, tenantService.getCurrentSysTenant());
             ehrAccess.setStatus(status);
             return ehrAccess.commit(committerId, systemId, DESCRIPTION);
         } catch (Exception e) {
@@ -271,7 +271,7 @@ public class EhrServiceImp extends BaseServiceImp implements EhrService {
     }
 
     @Override
-    public UUID updateStatus(UUID ehrId, EhrStatus status, UUID contributionId) {
+    public UUID updateStatus(UUID ehrId, EhrStatus status, UUID contributionId, UUID audit) {
 
         check(status);
         checkEhrExistForParty(ehrId, status);
@@ -298,7 +298,8 @@ public class EhrServiceImp extends BaseServiceImp implements EhrService {
                         contributionId,
                         null,
                         I_ConceptAccess.ContributionChangeType.MODIFICATION,
-                        DESCRIPTION)
+                        DESCRIPTION,
+                        audit)
                 .equals(false))
             throw new InternalServerException(
                     "Problem updating EHR_STATUS"); // unexpected problem. expected ones are thrown inside of update()
@@ -511,8 +512,7 @@ public class EhrServiceImp extends BaseServiceImp implements EhrService {
                     return Pair.of(
                             p.getLeft(),
                             new PersistedPartyProxy(getDataAccess())
-                                    .getOrCreate(
-                                            p.getRight().getSubject(), tenantService.getCurrentTenantIdentifier()));
+                                    .getOrCreate(p.getRight().getSubject(), tenantService.getCurrentSysTenant()));
                 })
                 .collect(Collectors.toList());
     }
