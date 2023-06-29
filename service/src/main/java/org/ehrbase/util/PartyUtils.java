@@ -25,6 +25,8 @@ import com.nedap.archie.rm.support.identification.PartyRef;
 import java.util.Objects;
 import org.ehrbase.api.exception.InternalServerException;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.UNHANDLED_PARTY_TYPE_DETECTED;
+
 /**
  * Utility class for PartyProxy and its concrete implementations.
  */
@@ -44,8 +46,8 @@ public class PartyUtils {
         } else if (isPartyRelated(partyProxy)) {
             return isEmpty((PartyRelated) partyProxy);
         } else {
-            throw new InternalServerException(
-                    "Unhandled Party type detected:" + partyProxy.getClass().getSimpleName());
+            throw new InternalServerException(PartyUtils.class, UNHANDLED_PARTY_TYPE_DETECTED,
+                    String.format(UNHANDLED_PARTY_TYPE_DETECTED, partyProxy.getClass().getSimpleName()));
         }
     }
 

@@ -17,6 +17,8 @@
  */
 package org.ehrbase.rest.ehrscape.controller;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.EXCEPTION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.FORMAT_NOT_SUPPORTED;
 import static org.ehrbase.rest.ehrscape.controller.BaseController.API_ECIS_CONTEXT_PATH_WITH_VERSION;
 import static org.ehrbase.rest.ehrscape.controller.BaseController.TEMPLATE;
 
@@ -87,7 +89,7 @@ public class TemplateController extends BaseController {
             document =
                     TemplateDocument.Factory.parse(new ByteArrayInputStream(content.getBytes(StandardCharsets.UTF_8)));
         } catch (XmlException | IOException e) {
-            throw new InvalidApiParameterException(e.getMessage());
+            throw new InvalidApiParameterException(TemplateController.class, EXCEPTION);
         }
 
         templateService.create(document.getTemplate());
@@ -106,7 +108,8 @@ public class TemplateController extends BaseController {
         if ((format == CompositionFormat.RAW
                 || format == CompositionFormat.EXPANDED
                 || format == CompositionFormat.ECISFLAT)) {
-            throw new InvalidApiParameterException(String.format("Format %s not supported", format));
+            throw new InvalidApiParameterException(TemplateController.class, FORMAT_NOT_SUPPORTED,
+                    String.format(FORMAT_NOT_SUPPORTED, format));
         }
 
         Composition composition = templateService.buildExample(templateId);

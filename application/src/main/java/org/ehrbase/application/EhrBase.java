@@ -18,6 +18,7 @@
 package org.ehrbase.application;
 
 import org.ehrbase.ServiceModuleConfiguration;
+import org.ehrbase.api.exception.ExceptionsTemplate;
 import org.ehrbase.rest.RestModuleConfiguration;
 import org.ehrbase.rest.ehrscape.RestEHRScapeModuleConfiguration;
 import org.springframework.boot.SpringApplication;
@@ -42,5 +43,6 @@ public class EhrBase {
 
     public static void main(String[] args) {
         SpringApplication.run(EhrBase.class, args);
+        new ExceptionsTemplate().populateExceptionMap();
     }
 }

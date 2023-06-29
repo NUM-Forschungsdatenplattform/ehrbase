@@ -17,6 +17,14 @@
  */
 package org.ehrbase.service;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.COULD_NOT_CREATE_AN_EHR_WITH_GIVEN_PARAMETERS;
+import static org.ehrbase.api.exception.ExceptionsTemplate.EXCEPTION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.NO_EHR_FOUND_WITH_GIVEN_ID;
+import static org.ehrbase.api.exception.ExceptionsTemplate.NO_VERSIONED_EHR_STATUS_WITH_GIVEN_VERSION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.PARTY_ID_ALREADY_USED;
+import static org.ehrbase.api.exception.ExceptionsTemplate.PROBLEM_CREATING_REVISION_HISTORY;
+import static org.ehrbase.api.exception.ExceptionsTemplate.PROBLEM_UPDATING_EHR_STATUS;
+import static org.ehrbase.api.exception.ExceptionsTemplate.SPECIFIED_PARTY_HAS_ALREADY_AN_EHR_SET;
 import static org.ehrbase.jooq.pg.Routines.partyUsage;
 import static org.ehrbase.jooq.pg.Tables.PARTY_IDENTIFIED;
 
@@ -53,6 +61,7 @@ import org.ehrbase.api.definitions.ServerConfig;
 import org.ehrbase.api.exception.InternalServerException;
 import org.ehrbase.api.exception.InvalidApiParameterException;
 import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.api.exception.ObjectNotFoundExceptionType;
 import org.ehrbase.api.exception.StateConflictException;
 import org.ehrbase.api.exception.UnprocessableEntityException;
 import org.ehrbase.api.exception.ValidationException;
@@ -88,8 +97,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional()
 public class EhrServiceImp extends BaseServiceImp implements EhrService {
     public static final String DESCRIPTION = "description";
-    public static final String PARTY_ID_ALREADY_USED =
-            "Supplied partyId[%s] is used by a different EHR in the same partyNamespace[%s].";
     private Logger logger = LoggerFactory.getLogger(getClass());
     private final ValidationService validationService;
     private final TenantService tenantService;
@@ -143,8 +150,7 @@ public class EhrServiceImp extends BaseServiceImp implements EhrService {
                     .getOrCreate(status.getSubject(), tenantService.getCurrentTenantIdentifier());
 
             if (I_EhrAccess.checkExist(getDataAccess(), subjectUuid)) {
-                throw new StateConflictException(
-                        "Specified party has already an EHR set (partyId=" + subjectUuid + ")");
+                throw new StateConflictException(EhrServiceImp.class, SPECIFIED_PARTY_HAS_ALREADY_AN_EHR_SET.formatted(subjectUuid));
             }
         }
 
@@ -157,7 +163,7 @@ public class EhrServiceImp extends BaseServiceImp implements EhrService {
             ehrAccess.setStatus(status);
             return ehrAccess.commit(committerId, systemId, DESCRIPTION);
         } catch (Exception e) {
-            throw new InternalServerException("Could not create an EHR with given parameters.", e);
+            throw new InternalServerException(EhrServiceImp.class, COULD_NOT_CREATE_AN_EHR_WITH_GIVEN_PARAMETERS);
         }
     }
 
@@ -196,7 +202,8 @@ public class EhrServiceImp extends BaseServiceImp implements EhrService {
     public EhrStatus getEhrStatus(UUID ehrUuid) {
         // pre-step: check for valid ehrId
         if (!hasEhr(ehrUuid)) {
-            throw new ObjectNotFoundException("ehr", "No EHR found with given ID: " + ehrUuid.toString());
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.EHR.getType(),
+                    EhrServiceImp.class, NO_EHR_FOUND_WITH_GIVEN_ID, NO_EHR_FOUND_WITH_GIVEN_ID.formatted(ehrUuid.toString()));
         }
 
         try {
@@ -207,7 +214,7 @@ public class EhrServiceImp extends BaseServiceImp implements EhrService {
 
         } catch (Exception e) {
             logger.error(e.getMessage());
-            throw new InternalServerException(e);
+            throw new InternalServerException(EhrServiceImp.class, EXCEPTION);
         }
     }
 
@@ -216,12 +223,14 @@ public class EhrServiceImp extends BaseServiceImp implements EhrService {
             UUID ehrUuid, UUID versionedObjectUid, int version) {
         // pre-step: check for valid ehrId
         if (!hasEhr(ehrUuid)) {
-            throw new ObjectNotFoundException("ehr", "No EHR found with given ID: " + ehrUuid.toString());
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.EHR.getType(),
+                    EhrServiceImp.class, NO_EHR_FOUND_WITH_GIVEN_ID, NO_EHR_FOUND_WITH_GIVEN_ID.formatted(ehrUuid.toString()));
         }
 
         if ((version == 0) || (I_StatusAccess.getLatestVersionNumber(getDataAccess(), versionedObjectUid) < version)) {
-            throw new ObjectNotFoundException(
-                    "versioned_ehr_status", "No VERSIONED_EHR_STATUS with given version: " + version);
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.VERSIONED_EHR_STATUS.getType(),
+                    EhrServiceImp.class, NO_VERSIONED_EHR_STATUS_WITH_GIVEN_VERSION,
+                    NO_VERSIONED_EHR_STATUS_WITH_GIVEN_VERSION.formatted(version));
         }
 
         I_StatusAccess statusAccess = I_StatusAccess.getVersionMapOfStatus(getDataAccess(), versionedObjectUid)
@@ -278,14 +287,15 @@ public class EhrServiceImp extends BaseServiceImp implements EhrService {
 
         // pre-step: check for valid ehrId
         if (!hasEhr(ehrId)) {
-            throw new ObjectNotFoundException("ehr", "No EHR found with given ID: " + ehrId.toString());
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.EHR.getType(),
+                    EhrServiceImp.class, NO_EHR_FOUND_WITH_GIVEN_ID, NO_EHR_FOUND_WITH_GIVEN_ID.formatted(ehrId.toString()));
         }
 
         I_EhrAccess ehrAccess;
         try {
             ehrAccess = I_EhrAccess.retrieveInstance(getDataAccess(), ehrId);
         } catch (Exception e) {
-            throw new InternalServerException(e);
+            throw new InternalServerException(EhrServiceImp.class, EXCEPTION);
         }
 
         ehrAccess.setStatus(status);
@@ -300,8 +310,7 @@ public class EhrServiceImp extends BaseServiceImp implements EhrService {
                         I_ConceptAccess.ContributionChangeType.MODIFICATION,
                         DESCRIPTION)
                 .equals(false))
-            throw new InternalServerException(
-                    "Problem updating EHR_STATUS"); // unexpected problem. expected ones are thrown inside of update()
+            throw new InternalServerException(EhrServiceImp.class, PROBLEM_UPDATING_EHR_STATUS); // unexpected problem. expected ones are thrown inside of update()
 
         return UUID.fromString(getEhrStatus(ehrId).getUid().getRoot().getValue());
     }
@@ -315,7 +324,7 @@ public class EhrServiceImp extends BaseServiceImp implements EhrService {
             String namespace = partyRef.get().getNamespace();
             Optional<UUID> ehrIdOpt = findBySubject(subjectId, namespace);
             if (ehrIdOpt.isPresent() && !ehrIdOpt.get().equals(ehrId)) {
-                throw new InvalidApiParameterException(String.format(PARTY_ID_ALREADY_USED, subjectId, namespace));
+                throw new InvalidApiParameterException(EhrServiceImp.class, PARTY_ID_ALREADY_USED, String.format(PARTY_ID_ALREADY_USED, subjectId, namespace));
             }
         }
     }
@@ -326,9 +335,9 @@ public class EhrServiceImp extends BaseServiceImp implements EhrService {
         } catch (Exception e) {
             // rethrow if this class, but wrap all others in InternalServerException
             if (e.getClass().equals(UnprocessableEntityException.class)) throw (UnprocessableEntityException) e;
-            if (e.getClass().equals(IllegalArgumentException.class)) throw new ValidationException(e);
+            if (e.getClass().equals(IllegalArgumentException.class)) throw new ValidationException(EhrServiceImp.class, e.getMessage());
             if (e.getClass().equals(ValidationException.class)) throw e;
-            else throw new InternalServerException(e);
+            else throw new InternalServerException(EhrServiceImp.class, EXCEPTION);
         }
     }
 
@@ -347,7 +356,8 @@ public class EhrServiceImp extends BaseServiceImp implements EhrService {
     public DvDateTime getCreationTime(UUID ehrId) {
         // pre-step: check for valid ehrId
         if (!hasEhr(ehrId)) {
-            throw new ObjectNotFoundException("ehr", "No EHR found with given ID: " + ehrId.toString());
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.EHR.getType(),
+                    EhrServiceImp.class, NO_EHR_FOUND_WITH_GIVEN_ID, NO_EHR_FOUND_WITH_GIVEN_ID.formatted(ehrId.toString()));
         }
 
         try {
@@ -358,7 +368,7 @@ public class EhrServiceImp extends BaseServiceImp implements EhrService {
             return new DvDateTime(offsetDateTime);
         } catch (Exception e) {
             logger.error(e.getMessage());
-            throw new InternalServerException(e);
+            throw new InternalServerException(EhrServiceImp.class, EXCEPTION);
         }
     }
 
@@ -381,7 +391,7 @@ public class EhrServiceImp extends BaseServiceImp implements EhrService {
 
             return statusId.toString() + "::" + getServerConfig().getNodename() + "::" + version;
         } catch (Exception e) {
-            throw new InternalServerException(e);
+            throw new InternalServerException(EhrServiceImp.class, EXCEPTION);
         }
     }
 
@@ -441,7 +451,7 @@ public class EhrServiceImp extends BaseServiceImp implements EhrService {
         }
 
         if (revisionHistory.getItems().isEmpty()) {
-            throw new InternalServerException("Problem creating RevisionHistory"); // never should be empty; not valid
+            throw new InternalServerException(EhrServiceImp.class, PROBLEM_CREATING_REVISION_HISTORY); // never should be empty; not valid
         }
         return revisionHistory;
     }

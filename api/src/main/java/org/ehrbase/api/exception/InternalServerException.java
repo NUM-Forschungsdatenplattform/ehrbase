@@ -17,22 +17,32 @@
  */
 package org.ehrbase.api.exception;
 
+import lombok.Getter;
+
 /**
  * Project-custom exception that allows outbound APIs to react on backend problems. Shall be thrown to invoke
  * status 500 "Internal Server Error" or whatever is appropriate.
  * All exceptions not covered by offered exceptions in this package. Should include internal error message.
  */
+@Getter
 public class InternalServerException extends RuntimeException {
 
-    public InternalServerException(String message) {
+    private final Class<?> entity;
+    private final String entityId;
+    private final String message;
+
+    public InternalServerException(Class<?> entity, String entityId, String message) {
         super(message);
+        this.entity = entity;
+        this.entityId = entityId;
+        this.message = message;
     }
 
-    public InternalServerException(String message, Throwable cause) {
-        super(message, cause);
+    public InternalServerException(Class<?> entity, String message) {
+        super(message);
+        this.entity = entity;
+        this.entityId = message;
+        this.message = message;
     }
 
-    public InternalServerException(Throwable cause) {
-        super(cause);
-    }
 }

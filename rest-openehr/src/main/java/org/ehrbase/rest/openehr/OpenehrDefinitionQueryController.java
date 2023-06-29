@@ -18,6 +18,7 @@
 package org.ehrbase.rest.openehr;
 
 import static org.apache.commons.lang3.StringUtils.isBlank;
+import static org.ehrbase.api.exception.ExceptionsTemplate.INVALID_CONTENT_FORMAT;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 import static org.springframework.http.MediaType.APPLICATION_XML_VALUE;
@@ -155,7 +156,8 @@ public class OpenehrDefinitionQueryController extends BaseController implements 
                         try {
                             return new ObjectMapper().readTree(p);
                         } catch (JsonProcessingException e) {
-                            throw new GeneralRequestProcessingException("Invalid content format", e);
+                            throw new GeneralRequestProcessingException(
+                                    OpenehrDefinitionQueryController.class, INVALID_CONTENT_FORMAT);
                         }
                     })
                     .map(n -> n.get("q"))
@@ -166,7 +168,7 @@ public class OpenehrDefinitionQueryController extends BaseController implements 
         } else if (TEXT_PLAIN.isCompatibleWith(mediaType)) {
             aql = queryPayload;
         } else {
-            throw new UnsupportedMediaTypeException(mediaType.getType());
+            throw new UnsupportedMediaTypeException(OpenehrDefinitionQueryController.class, mediaType.getType());
         }
 
         if (isBlank(aql)) {
@@ -208,7 +210,7 @@ public class OpenehrDefinitionQueryController extends BaseController implements 
 
             return ResponseEntity.ok().headers(respHeaders).build();
         } else {
-            throw new UnexpectedSwitchCaseException(mediaType.getType());
+            throw new UnexpectedSwitchCaseException(UnexpectedSwitchCaseException.class, mediaType.getType());
         }
     }
 }

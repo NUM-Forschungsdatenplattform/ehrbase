@@ -18,6 +18,12 @@
 package org.ehrbase.rest.openehr;
 
 import static org.apache.commons.lang3.StringUtils.unwrap;
+import static org.ehrbase.api.exception.ExceptionsTemplate.A_VALID_VERSION_UUID_MUST_BE_PROVIDED;
+import static org.ehrbase.api.exception.ExceptionsTemplate.EXCEPTION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.FOLDER_FOR_EHR_ID_AND_PATH_DOES_NOT_EXIST;
+import static org.ehrbase.api.exception.ExceptionsTemplate.FOLDER_WITH_ID_AND_PATH_DOES_NOT_EXIST;
+import static org.ehrbase.api.exception.ExceptionsTemplate.THE_VALUE_OF_PARAMETER_IS_INVALID;
+import static org.ehrbase.api.exception.ExceptionsTemplate.VERSION_BRANCHING_IS_NOT_SUPPORTED;
 
 import com.nedap.archie.rm.directory.Folder;
 import com.nedap.archie.rm.support.identification.ObjectVersionId;
@@ -32,6 +38,7 @@ import org.ehrbase.api.authorization.EhrbaseAuthorization;
 import org.ehrbase.api.authorization.EhrbasePermission;
 import org.ehrbase.api.exception.InvalidApiParameterException;
 import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.api.exception.ObjectNotFoundExceptionType;
 import org.ehrbase.api.service.DirectoryService;
 import org.ehrbase.response.openehr.DirectoryResponseData;
 import org.ehrbase.rest.BaseController;
@@ -155,10 +162,9 @@ public class OpenehrDirectoryController extends BaseController implements Direct
         // Get the folder entry from database
         Optional<Folder> foundFolder = directoryService.get(ehrId, versionUid, path);
         if (foundFolder.isEmpty()) {
-            throw new ObjectNotFoundException(
-                    "DIRECTORY",
-                    String.format(
-                            "Folder with id %s and path %s does not exist.", versionUid, path != null ? path : "/"));
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.DIRECTORY.getType(),
+                    OpenehrDirectoryController.class, FOLDER_WITH_ID_AND_PATH_DOES_NOT_EXIST,
+                    String.format(FOLDER_WITH_ID_AND_PATH_DOES_NOT_EXIST, versionUid, path != null ? path : "/"));
         }
 
         return createDirectoryResponse(HttpMethod.GET, RETURN_REPRESENTATION, accept, foundFolder.get(), ehrId);
@@ -167,16 +173,16 @@ public class OpenehrDirectoryController extends BaseController implements Direct
     private void validateVersionUid(ObjectVersionId versionUid) {
         String versionUidStr = versionUid.getValue();
         if (StringUtils.isEmpty(versionUidStr)) {
-            throw new InvalidApiParameterException("a valid  must be provided");
+            throw new InvalidApiParameterException(OpenehrDirectoryController.class, A_VALID_VERSION_UUID_MUST_BE_PROVIDED);
         }
 
         try {
             versionUid.getCreatingSystemId();
             if (versionUid.isBranch()) {
-                throw new InvalidApiParameterException("Version branching is not supported");
+                throw new InvalidApiParameterException(OpenehrDirectoryController.class, VERSION_BRANCHING_IS_NOT_SUPPORTED);
             }
         } catch (UnsupportedOperationException e) {
-            throw new InvalidApiParameterException(e.getMessage(), e);
+            throw new InvalidApiParameterException(OpenehrDirectoryController.class, EXCEPTION);
         }
     }
 
@@ -205,9 +211,9 @@ public class OpenehrDirectoryController extends BaseController implements Direct
         }
 
         if (foundFolder.isEmpty()) {
-            throw new ObjectNotFoundException(
-                    "folder",
-                    "The FOLDER for ehrId %s and path %s does not exist."
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.FOLDER.getType(),
+                    OpenehrDirectoryController.class, FOLDER_FOR_EHR_ID_AND_PATH_DOES_NOT_EXIST,
+                    FOLDER_FOR_EHR_ID_AND_PATH_DOES_NOT_EXIST
                             .formatted(ehrId.toString(), path != null ? path : "/"));
         }
 
@@ -279,7 +285,7 @@ public class OpenehrDirectoryController extends BaseController implements Direct
         try {
             Paths.get(path);
         } catch (InvalidPathException e) {
-            throw new InvalidApiParameterException("The value of path parameter is invalid", e);
+            throw new InvalidApiParameterException(OpenehrDirectoryController.class, THE_VALUE_OF_PARAMETER_IS_INVALID);
         }
     }
 }

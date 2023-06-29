@@ -17,6 +17,9 @@
  */
 package org.ehrbase.api.exception;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
 /**
  * Project-custom exception that allows outbound APIs to react on backend problems. Shall be thrown to invoke
  * status 404 "Not found" or whatever is appropriate.
@@ -25,21 +28,21 @@ package org.ehrbase.api.exception;
  * @author Jake Smolka
  * @since 1.0
  */
+@AllArgsConstructor
+@Getter
 public class ObjectNotFoundException extends RuntimeException {
 
     private final String type;
+    private final Class<?> entity;
+    private final String entityId;
+    private final String message;
 
-    public ObjectNotFoundException(String type, String message) {
+    public ObjectNotFoundException(String type, Class<?> entity, String message) {
         super(message);
         this.type = type;
+        this.entity = entity;
+        this.entityId = message;
+        this.message = message;
     }
 
-    public ObjectNotFoundException(String type, String message, Throwable cause) {
-        super(message, cause);
-        this.type = type;
-    }
-
-    public String getType() {
-        return type;
-    }
 }

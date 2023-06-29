@@ -31,6 +31,8 @@ import org.springframework.cache.CacheManager;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.CANNOT_CREATE_USER;
+
 @Service
 public class PartyServiceImp implements IUserService, PartyService {
     private final IAuthenticationFacade authenticationFacade;
@@ -80,7 +82,7 @@ public class PartyServiceImp implements IUserService, PartyService {
                         return partyProxyRepository.findInternalUserId(key.getVal());
                     }
                 })
-                .orElseThrow(() -> new InternalServerException("Cannot create User"));
+                .orElseThrow(() -> new InternalServerException(PartyServiceImp.class, CANNOT_CREATE_USER));
     }
 
     @Override

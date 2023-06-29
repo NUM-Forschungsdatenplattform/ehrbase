@@ -17,6 +17,11 @@
  */
 package org.ehrbase.rest.ehrscape.controller;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.INVALID_CONTENT_FORMAT;
+import static org.ehrbase.api.exception.ExceptionsTemplate.SUBJECT_ID_IS_MISSING;
+import static org.ehrbase.api.exception.ExceptionsTemplate.SUBJECT_ID_OR_SUBJECT_NAMESPACE_MISSING;
+import static org.ehrbase.api.exception.ExceptionsTemplate.SUBJECT_NAMESPACE_IS_MISSING;
+import static org.ehrbase.api.exception.ExceptionsTemplate.WRONG_CONTENT_TYPE_IN_HEADER_REQUEST;
 import static org.ehrbase.rest.ehrscape.controller.BaseController.API_ECIS_CONTEXT_PATH_WITH_VERSION;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -94,9 +99,9 @@ public class EhrController extends BaseController {
         // shall be
         // returned
         if ((subjectId == null) || (subjectNamespace == null)) {
-            throw new InvalidApiParameterException("subjectId or subjectNamespace missing");
+            throw new InvalidApiParameterException(EhrController.class, SUBJECT_ID_OR_SUBJECT_NAMESPACE_MISSING);
         } else if ((subjectId.isEmpty()) || (subjectNamespace.isEmpty())) {
-            throw new InvalidApiParameterException("subjectId or subjectNamespace emtpy");
+            throw new InvalidApiParameterException(EhrController.class, SUBJECT_ID_OR_SUBJECT_NAMESPACE_MISSING);
         }
 
         var subject = new PartySelf(new PartyRef(new HierObjectId(subjectId), subjectNamespace, "PERSON"));
@@ -167,14 +172,14 @@ public class EhrController extends BaseController {
         try {
             attributes = new ObjectMapper().readerForMapOf(Object.class).readValue(content);
         } catch (JsonProcessingException e) {
-            throw new GeneralRequestProcessingException("Invalid content format", e);
+            throw new GeneralRequestProcessingException(EhrController.class, INVALID_CONTENT_FORMAT);
         }
 
         String subjectId = getAttribute(attributes, "subjectId", String.class)
-                .orElseThrow(() -> new InvalidApiParameterException("subjectId missing"));
+                .orElseThrow(() -> new InvalidApiParameterException(EhrController.class, SUBJECT_ID_IS_MISSING));
 
         String subjectNamespace = getAttribute(attributes, "subjectNamespace", String.class)
-                .orElseThrow(() -> new InvalidApiParameterException("subjectNamespace missing"));
+                .orElseThrow(() -> new InvalidApiParameterException(EhrController.class, SUBJECT_NAMESPACE_IS_MISSING));
 
         PartySelf subject = new PartySelf(new PartyRef(new HierObjectId(subjectId), subjectNamespace, "PERSON"));
         ehrStatus.setSubject(subject);
@@ -207,7 +212,7 @@ public class EhrController extends BaseController {
             } else if (mediaType.isCompatibleWith(MediaType.APPLICATION_XML)) {
                 format = CompositionFormat.XML;
             } else {
-                throw new InvalidApiParameterException("Wrong Content-Type header in request");
+                throw new InvalidApiParameterException(EhrController.class, WRONG_CONTENT_TYPE_IN_HEADER_REQUEST);
             }
         }
 

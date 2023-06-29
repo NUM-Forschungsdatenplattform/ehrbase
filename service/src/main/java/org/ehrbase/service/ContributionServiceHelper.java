@@ -44,7 +44,7 @@ public class ContributionServiceHelper {
                 return new CanonicalJson().unmarshalToMap(content);
             case XML:
             default:
-                throw new UnexpectedSwitchCaseException(format);
+                throw new UnexpectedSwitchCaseException(UnexpectedSwitchCaseException.class, UnexpectedSwitchCaseException.formatMessage(format));
         }
     }
 
@@ -79,7 +79,7 @@ public class ContributionServiceHelper {
                 break;
             case XML:
             default:
-                throw new UnexpectedSwitchCaseException(format);
+                throw new UnexpectedSwitchCaseException(UnexpectedSwitchCaseException.class, UnexpectedSwitchCaseException.formatMessage(format));
         }
 
         return versionsList;
@@ -104,7 +104,7 @@ public class ContributionServiceHelper {
                 return new CanonicalJson().unmarshal(json, RMObject.class);
             case XML:
             default:
-                throw new UnexpectedSwitchCaseException(format);
+                throw new UnexpectedSwitchCaseException(UnexpectedSwitchCaseException.class, UnexpectedSwitchCaseException.formatMessage(format));
         }
     }
 
@@ -154,7 +154,7 @@ public class ContributionServiceHelper {
                 break;
             case XML:
             default:
-                throw new UnexpectedSwitchCaseException(format);
+                throw new UnexpectedSwitchCaseException(UnexpectedSwitchCaseException.class, UnexpectedSwitchCaseException.formatMessage(format));
         }
         return auditResult;
     }

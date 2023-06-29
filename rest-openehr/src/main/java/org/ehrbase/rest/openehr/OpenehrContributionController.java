@@ -54,6 +54,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.WRONG_ACCEPT_HEADER_IN_REQUEST;
+
 @TenantAware
 @RestController
 @RequestMapping(
@@ -219,7 +221,7 @@ public class OpenehrContributionController extends BaseController implements Con
                     || format.equals(CompositionFormat.RAW)) {
                 respHeaders.setContentType(MediaType.APPLICATION_JSON);
             } else {
-                throw new NotAcceptableException("Wrong Accept header in request");
+                throw new NotAcceptableException(OpenehrContributionController.class, WRONG_ACCEPT_HEADER_IN_REQUEST);
             }
         } // else continue with returning but without additional data from above, e.g. body
 

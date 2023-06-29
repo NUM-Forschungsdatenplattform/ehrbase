@@ -17,6 +17,17 @@
  */
 package org.ehrbase.dao.access.jooq;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.COULD_NOT_FIND_EHR_STATUS_VERSION_MATCHING_GIVEN_TIMESTAMP;
+import static org.ehrbase.api.exception.ExceptionsTemplate.COULD_NT_MARSHALL_GIVEN_EHR_STATUS;
+import static org.ehrbase.api.exception.ExceptionsTemplate.DATABASE_INCONSISTENCY;
+import static org.ehrbase.api.exception.ExceptionsTemplate.DB_INCONSISTENCY_NO_STATUS_FOR_GIVEN_EHR_ID;
+import static org.ehrbase.api.exception.ExceptionsTemplate.ERROR_CREATING_VERSION_MAP_OF_EHR_STATUS;
+import static org.ehrbase.api.exception.ExceptionsTemplate.ILLEGAL_TO_COMMIT_AUDIT_DETAILS_ACCESS_WITHOUT_SETTING_MANDATORY_FIELDS;
+import static org.ehrbase.api.exception.ExceptionsTemplate.ILLEGAL_TO_COMMIT_THE_CONTRIBUTIONS_AUDIT_DETAILS_ACCESS_WITHOUT_SETTING_MANDATORY_FIELDS;
+import static org.ehrbase.api.exception.ExceptionsTemplate.INVALID_NULL_VALUED_CONTRIBUTION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.PROBLEM_COMPARING_TIMESTAMPS_OF_EHR_STATUS_VERSIONS;
+import static org.ehrbase.api.exception.ExceptionsTemplate.STORING_EHR_STATUS_FAILED;
+import static org.ehrbase.api.exception.ExceptionsTemplate.VERSION_MAP_GENERATION_FAILED;
 import static org.ehrbase.jooq.pg.Tables.PARTY_IDENTIFIED;
 import static org.ehrbase.jooq.pg.Tables.STATUS;
 import static org.ehrbase.jooq.pg.Tables.STATUS_HISTORY;
@@ -40,6 +51,7 @@ import java.util.UUID;
 import org.ehrbase.api.exception.InternalServerException;
 import org.ehrbase.api.exception.InvalidApiParameterException;
 import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.api.exception.ObjectNotFoundExceptionType;
 import org.ehrbase.dao.access.interfaces.I_AuditDetailsAccess;
 import org.ehrbase.dao.access.interfaces.I_ConceptAccess;
 import org.ehrbase.dao.access.interfaces.I_ConceptAccess.ContributionChangeType;
@@ -97,7 +109,7 @@ public class StatusAccess extends DataAccess implements I_StatusAccess {
     @Override
     public UUID commit(LocalDateTime timestamp, UUID contribution) {
         if (contribution == null) {
-            throw new InternalServerException("Invalid null valued contribution.");
+            throw new InternalServerException(StatusAccess.class, INVALID_NULL_VALUED_CONTRIBUTION);
         }
         setContributionId(contribution);
 
@@ -110,7 +122,7 @@ public class StatusAccess extends DataAccess implements I_StatusAccess {
         if (auditDetailsAccess.getChangeType() == null
                 || auditDetailsAccess.getSystemId() == null
                 || auditDetailsAccess.getCommitter() == null) {
-            throw new InternalServerException("Illegal to commit AuditDetailsAccess without setting mandatory fields.");
+            throw new InternalServerException(StatusAccess.class, ILLEGAL_TO_COMMIT_AUDIT_DETAILS_ACCESS_WITHOUT_SETTING_MANDATORY_FIELDS);
         }
         UUID auditId = auditDetailsAccess.commit();
         statusRecord.setHasAudit(auditId);
@@ -120,7 +132,7 @@ public class StatusAccess extends DataAccess implements I_StatusAccess {
         statusRecord.setHasAudit(auditId);
 
         if (statusRecord.store() == 0) {
-            throw new InvalidApiParameterException("Input EHR couldn't be stored; Storing EHR_STATUS failed");
+            throw new InvalidApiParameterException(StatusAccess.class, STORING_EHR_STATUS_FAILED);
         }
 
         return statusRecord.getId();
@@ -142,7 +154,7 @@ public class StatusAccess extends DataAccess implements I_StatusAccess {
     @Override
     public boolean update(LocalDateTime timestamp, UUID contribution) {
         if (contribution == null) {
-            throw new InternalServerException("Invalid null valued contribution.");
+            throw new InternalServerException(StatusAccess.class, INVALID_NULL_VALUED_CONTRIBUTION);
         }
         setContributionId(contribution);
 
@@ -158,8 +170,7 @@ public class StatusAccess extends DataAccess implements I_StatusAccess {
         try {
             return statusRecord.update() > 0;
         } catch (RuntimeException e) {
-            throw new InvalidApiParameterException(
-                    "Couldn't marshall given EHR_STATUS / OTHER_DETAILS, content probably breaks RM rules");
+            throw new InvalidApiParameterException(StatusAccess.class, COULD_NT_MARSHALL_GIVEN_EHR_STATUS);
         }
     }
 
@@ -174,7 +185,7 @@ public class StatusAccess extends DataAccess implements I_StatusAccess {
     @Override
     public int delete(LocalDateTime timestamp, UUID contribution) {
         if (contribution == null) {
-            throw new InternalServerException("Invalid null valued contribution.");
+            throw new InternalServerException(StatusAccess.class, INVALID_NULL_VALUED_CONTRIBUTION);
         }
         setContributionId(contribution);
 
@@ -228,7 +239,7 @@ public class StatusAccess extends DataAccess implements I_StatusAccess {
 
         getDataAccess().getContext().attach(newRecord);
         if (newRecord.insert() != 1) {
-            throw new InternalServerException("DB inconsistency");
+            throw new InternalServerException(StatusAccess.class, DATABASE_INCONSISTENCY);
         } else {
             return 1;
         }
@@ -239,8 +250,8 @@ public class StatusAccess extends DataAccess implements I_StatusAccess {
         contributionAccess.setAuditDetailsChangeType(I_ConceptAccess.fetchContributionChangeType(this, changeType));
         if (contributionAccess.getAuditsCommitter() == null || contributionAccess.getAuditsSystemId() == null) {
             if (committerId == null || systemId == null) {
-                throw new InternalServerException(
-                        "Illegal to commit the contribution's AuditDetailsAccess without setting mandatory fields.");
+                throw new InternalServerException(StatusAccess.class,
+                        ILLEGAL_TO_COMMIT_THE_CONTRIBUTIONS_AUDIT_DETAILS_ACCESS_WITHOUT_SETTING_MANDATORY_FIELDS);
             } else {
                 contributionAccess.setAuditDetailsCommitter(committerId);
                 contributionAccess.setAuditDetailsSystemId(systemId);
@@ -317,7 +328,8 @@ public class StatusAccess extends DataAccess implements I_StatusAccess {
             if (!domainAccess.getContext().fetchExists(STATUS_HISTORY, STATUS_HISTORY.EHR_ID.eq(ehrId)))
             // no current one (premise from above) and no history --> inconsistency
             {
-                throw new InternalServerException("DB inconsistency. No STATUS for given EHR ID: " + ehrId);
+                throw new InternalServerException(StatusAccess.class, DB_INCONSISTENCY_NO_STATUS_FOR_GIVEN_EHR_ID,
+                        String.format(DB_INCONSISTENCY_NO_STATUS_FOR_GIVEN_EHR_ID, ehrId));
             } else {
                 Result<StatusHistoryRecord> recordsRes = domainAccess
                         .getContext()
@@ -408,7 +420,7 @@ public class StatusAccess extends DataAccess implements I_StatusAccess {
         }
 
         if (versionCounter != 0) {
-            throw new InternalServerException("Version Map generation failed");
+            throw new InternalServerException(StatusAccess.class, VERSION_MAP_GENERATION_FAILED);
         }
 
         return versionMap;
@@ -437,7 +449,7 @@ public class StatusAccess extends DataAccess implements I_StatusAccess {
             statusAccess = new StatusAccess(domainAccess, historyRecord.getEhrId(), tenantIdentifier);
             statusAccess.setStatusRecord(historyRecord);
         } else {
-            throw new InternalServerException("Error creating version map of EHR_STATUS");
+            throw new InternalServerException(StatusAccess.class, ERROR_CREATING_VERSION_MAP_OF_EHR_STATUS);
         }
 
         // retrieve corresponding audit
@@ -604,11 +616,12 @@ public class StatusAccess extends DataAccess implements I_StatusAccess {
                             - i; // reverses iterator because order was reversed above and always get non zero
                 }
             } else {
-                throw new InternalServerException("Problem comparing timestamps of EHR_STATUS versions");
+                throw new InternalServerException(StatusAccess.class, PROBLEM_COMPARING_TIMESTAMPS_OF_EHR_STATUS_VERSIONS);
             }
         }
 
-        throw new ObjectNotFoundException("EHR_STATUS", "Could not find EHR_STATUS version matching given timestamp");
+        throw new ObjectNotFoundException(ObjectNotFoundExceptionType.EHR_STATUS.getType(),
+                StatusAccess.class, COULD_NOT_FIND_EHR_STATUS_VERSION_MATCHING_GIVEN_TIMESTAMP);
     }
 
     @Override

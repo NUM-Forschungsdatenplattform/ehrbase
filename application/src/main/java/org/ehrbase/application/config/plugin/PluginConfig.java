@@ -17,6 +17,7 @@
  */
 package org.ehrbase.application.config.plugin;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.URI_FOR_PLUGIN_ALREADY_REGISTERED_BY_PLUGIN;
 import static org.ehrbase.plugin.PluginHelper.PLUGIN_MANAGER_PREFIX;
 
 import java.util.HashMap;
@@ -107,8 +108,8 @@ public class PluginConfig {
                 .filter(e -> e.getValue().equals(uri))
                 .findAny()
                 .ifPresent(e -> {
-                    throw new InternalServerException(String.format(
-                            "uri %s for plugin %s already registered by plugin %s", uri, pluginId, e.getKey()));
+                    throw new InternalServerException(PluginConfig.class, URI_FOR_PLUGIN_ALREADY_REGISTERED_BY_PLUGIN,
+                            String.format(URI_FOR_PLUGIN_ALREADY_REGISTERED_BY_PLUGIN, uri, pluginId, e.getKey()));
                 });
 
         registeredUrl.put(pluginId, uri);

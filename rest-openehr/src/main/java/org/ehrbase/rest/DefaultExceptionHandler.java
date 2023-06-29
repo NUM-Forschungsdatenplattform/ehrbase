@@ -17,16 +17,13 @@
  */
 package org.ehrbase.rest;
 
-import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
 import org.ehrbase.api.exception.GeneralRequestProcessingException;
 import org.ehrbase.api.exception.InvalidApiParameterException;
 import org.ehrbase.api.exception.NotAcceptableException;
 import org.ehrbase.api.exception.ObjectNotFoundException;
-import org.ehrbase.api.exception.PreconditionFailedException;
 import org.ehrbase.api.exception.StateConflictException;
-import org.ehrbase.api.exception.UnprocessableEntityException;
 import org.ehrbase.api.exception.UnsupportedMediaTypeException;
 import org.ehrbase.api.exception.ValidationException;
 import org.ehrbase.serialisation.exception.UnmarshalException;
@@ -43,7 +40,6 @@ import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.ServletRequestBindingException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import org.springframework.web.server.ResponseStatusException;
@@ -102,31 +98,10 @@ public class DefaultExceptionHandler {
         return handleExceptionInternal(ex, ex.getMessage(), new HttpHeaders(), HttpStatus.CONFLICT);
     }
 
-    // 412
-    @ExceptionHandler(PreconditionFailedException.class)
-    public ResponseEntity<Object> handlePreconditionFailedException(PreconditionFailedException ex) {
-
-        var headers = new HttpHeaders();
-
-        if (ex.getUrl() != null && ex.getCurrentVersionUid() != null) {
-            headers.setETag("\"" + ex.getCurrentVersionUid() + "\"");
-            headers.setLocation(URI.create(ex.getUrl()));
-        }
-
-        return handleExceptionInternal(ex, ex.getMessage(), headers, HttpStatus.PRECONDITION_FAILED);
-    }
-
     // 415
     @ExceptionHandler({HttpMediaTypeNotSupportedException.class, UnsupportedMediaTypeException.class})
     public ResponseEntity<Object> handleUnsupportedMediaTypeException(UnsupportedMediaTypeException ex) {
         return handleExceptionInternal(ex, ex.getMessage(), new HttpHeaders(), HttpStatus.UNSUPPORTED_MEDIA_TYPE);
-    }
-
-    // 422
-    @ExceptionHandler(UnprocessableEntityException.class)
-    public ResponseEntity<Object> handleUnprocessableEntityException(
-            UnprocessableEntityException ex, WebRequest request) {
-        return handleExceptionInternal(ex, ex.getMessage(), new HttpHeaders(), HttpStatus.UNPROCESSABLE_ENTITY);
     }
 
     // custom status

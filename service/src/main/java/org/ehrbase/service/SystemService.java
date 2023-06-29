@@ -28,6 +28,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.CANNOT_FETCH_SYSTEM_ID;
+
 /**
  * @author Stefan Spiska
  */
@@ -64,7 +66,7 @@ public class SystemService {
             uuid = systemRepository.findSystemId(serverConfig.getNodename());
         }
 
-        systemId = uuid.orElseThrow(() -> new InternalServerException("Can not fetch System Id"));
+        systemId = uuid.orElseThrow(() -> new InternalServerException(SystemService.class, CANNOT_FETCH_SYSTEM_ID));
     }
 
     public UUID getSystemUuid() {

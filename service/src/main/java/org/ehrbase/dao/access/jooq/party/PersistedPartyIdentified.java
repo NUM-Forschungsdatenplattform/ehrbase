@@ -17,6 +17,7 @@
  */
 package org.ehrbase.dao.access.jooq.party;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.INCONSISTENT_PARTY_IDENTIFIED_UUID;
 import static org.ehrbase.jooq.pg.Tables.PARTY_IDENTIFIED;
 
 import com.nedap.archie.rm.datavalues.DvIdentifier;
@@ -133,7 +134,8 @@ public class PersistedPartyIdentified extends PersistedParty {
         // identification)
         if (uuid != null) {
             Record record = domainAccess.getContext().fetchAny(PARTY_IDENTIFIED, PARTY_IDENTIFIED.ID.eq(uuid));
-            if (record == null) throw new InternalServerException("Inconsistent PartyIdentified UUID:" + uuid);
+            if (record == null) throw new InternalServerException(PersistedPartyIdentified.class,
+                    INCONSISTENT_PARTY_IDENTIFIED_UUID, String.format(INCONSISTENT_PARTY_IDENTIFIED_UUID, uuid));
             if (!record.get(PARTY_IDENTIFIED.NAME).equals(((PartyIdentified) partyProxy).getName()))
                 throw new IllegalArgumentException(
                         "Conflicting identification, existing name was:" + record.get(PARTY_IDENTIFIED.NAME)

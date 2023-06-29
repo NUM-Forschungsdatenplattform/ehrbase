@@ -28,6 +28,7 @@ import org.ehrbase.api.annotations.TenantAware;
 import org.ehrbase.api.authorization.EhrbaseAuthorization;
 import org.ehrbase.api.authorization.EhrbasePermission;
 import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.api.exception.ObjectNotFoundExceptionType;
 import org.ehrbase.api.service.ContributionService;
 import org.ehrbase.api.service.EhrService;
 import org.ehrbase.response.openehr.admin.AdminDeleteResponseData;
@@ -38,6 +39,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import static org.ehrbase.api.exception.ExceptionsTemplate.EHR_WITH_ID_DOES_NOT_EXIST;
 
 /**
  * Admin API controller for Contribution related data. Provides endpoints to update and remove Contributions in
@@ -94,8 +97,9 @@ public class AdminContributionController extends BaseController {
 
         // Check if EHR exists
         if (!this.ehrService.hasEhr(ehrUuid)) {
-            throw new ObjectNotFoundException(
-                    "Admin Contribution", String.format("EHR with id %s does not exist", ehrId));
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.ADMIN_CONTRIBUTION.getType(),
+                    AdminContributionController.class, EHR_WITH_ID_DOES_NOT_EXIST,
+                    String.format(EHR_WITH_ID_DOES_NOT_EXIST, ehrId));
         }
 
         // TODO: Implement endpoint functionality
@@ -136,8 +140,9 @@ public class AdminContributionController extends BaseController {
 
         // Check if EHR exists
         if (!this.ehrService.hasEhr(ehrUuid)) {
-            throw new ObjectNotFoundException(
-                    "Admin Contribution", String.format("EHR with id %s does not exist", ehrId));
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.ADMIN_CONTRIBUTION.getType(),
+                    AdminContributionController.class, EHR_WITH_ID_DOES_NOT_EXIST,
+                    String.format(EHR_WITH_ID_DOES_NOT_EXIST, ehrId));
         }
 
         UUID contributionUUID = UUID.fromString(contributionId);

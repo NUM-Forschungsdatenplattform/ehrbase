@@ -17,18 +17,19 @@
  */
 package org.ehrbase.api.exception;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
 /**
  * Project-custom exception that allows outbound APIs to react on backend problems. Shall be thrown to invoke
  * status 409 "Conflict" or whatever is appropriate.
  * Request is in conflict with current state, e.g. referenced version of object is not the last version.
  */
+@AllArgsConstructor
+@Getter
 public class StateConflictException extends RuntimeException {
 
-    public StateConflictException(String message) {
-        super(message);
-    }
+    private final Class<?> entity;
+    private final String entityId;
 
-    public StateConflictException(String message, Throwable cause) {
-        super(message, cause);
-    }
 }

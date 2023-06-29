@@ -17,6 +17,12 @@
  */
 package org.ehrbase.dao.access.jooq;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.ADMIN_DELETION_OF_EHR_FAILED;
+import static org.ehrbase.api.exception.ExceptionsTemplate.CAN_NOT_UPDATE_STATUS_WITH_INVALID_CONTRIBUTION_ID;
+import static org.ehrbase.api.exception.ExceptionsTemplate.ERROR_RETRIEVING_EHR_STATUS;
+import static org.ehrbase.api.exception.ExceptionsTemplate.THIS_COMMIT_IS_NOT_LEGAL;
+import static org.ehrbase.api.exception.ExceptionsTemplate.THIS_DELETE_IS_NOT_LEGAL;
+import static org.ehrbase.api.exception.ExceptionsTemplate.THIS_UPDATE_IS_NOT_LEGAL;
 import static org.ehrbase.jooq.pg.Tables.COMPOSITION;
 import static org.ehrbase.jooq.pg.Tables.EHR_;
 import static org.ehrbase.jooq.pg.Tables.ENTRY;
@@ -294,7 +300,7 @@ public class EhrAccess extends DataAccess implements I_EhrAccess {
                     .fetch();
 
             if (result.isEmpty()) {
-                throw new InternalServerException("Error retrieving EHR_STATUS"); // should never be reached
+                throw new InternalServerException(EhrAccess.class, ERROR_RETRIEVING_EHR_STATUS); // should never be reached
             }
 
             // result set of history table is always version+1, because the latest is in non-history table
@@ -537,7 +543,7 @@ public class EhrAccess extends DataAccess implements I_EhrAccess {
     @Deprecated
     @Override
     public UUID commit() {
-        throw new InternalServerException("INTERNAL: this commit is not legal");
+        throw new InternalServerException(EhrAccess.class, THIS_COMMIT_IS_NOT_LEGAL);
     }
 
     /**
@@ -617,7 +623,7 @@ public class EhrAccess extends DataAccess implements I_EhrAccess {
     @Deprecated
     @Override
     public Boolean update() {
-        throw new InternalServerException("INTERNAL: this update is not legal");
+        throw new InternalServerException(EhrAccess.class, THIS_UPDATE_IS_NOT_LEGAL);
     }
 
     /**
@@ -628,7 +634,7 @@ public class EhrAccess extends DataAccess implements I_EhrAccess {
     @Deprecated
     @Override
     public Boolean update(Boolean force) {
-        throw new InternalServerException("INTERNAL: this update is not legal");
+        throw new InternalServerException(EhrAccess.class, THIS_UPDATE_IS_NOT_LEGAL);
     }
 
     @Override
@@ -646,7 +652,7 @@ public class EhrAccess extends DataAccess implements I_EhrAccess {
             if (access != null) {
                 this.contributionAccess = access;
             } else {
-                throw new InternalServerException("Can't update status with invalid contribution ID.");
+                throw new InternalServerException(EhrAccess.class, CAN_NOT_UPDATE_STATUS_WITH_INVALID_CONTRIBUTION_ID);
             }
             // Status check, because a contribution is needed only IF a versioned object is changed.
             // So the plain EHR object change, e.g. only with new directory reference, shall not have a separate
@@ -685,7 +691,7 @@ public class EhrAccess extends DataAccess implements I_EhrAccess {
     @Deprecated
     @Override
     public Integer delete() {
-        throw new InternalServerException("INTERNAL: this delete is not legal");
+        throw new InternalServerException(EhrAccess.class, THIS_DELETE_IS_NOT_LEGAL);
     }
 
     /**
@@ -857,7 +863,7 @@ public class EhrAccess extends DataAccess implements I_EhrAccess {
         Result<AdminDeleteEhrFullRecord> result =
                 Routines.adminDeleteEhrFull(getContext().configuration(), this.getId());
         if (result.isEmpty() || !Boolean.TRUE.equals(result.get(0).getDeleted())) {
-            throw new InternalServerException("Admin deletion of EHR failed!");
+            throw new InternalServerException(EhrAccess.class, ADMIN_DELETION_OF_EHR_FAILED);
         }
     }
 

@@ -18,6 +18,11 @@
 package org.ehrbase.rest.openehr;
 
 import static org.apache.commons.lang3.StringUtils.unwrap;
+import static org.ehrbase.api.exception.ExceptionsTemplate.EHR_STATUS_NOT_FOUND;
+import static org.ehrbase.api.exception.ExceptionsTemplate.EHR_WITH_SPECIFIED_ID_DOES_NOT_EXIST;
+import static org.ehrbase.api.exception.ExceptionsTemplate.EXCEPTION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.GIVEN_IF_MATCH_HEADER_DOES_NOT_MATCH_LATEST_EXISTING_VERSION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.UPDATE_OF_EHR_STATUS_FAILED;
 
 import com.nedap.archie.rm.changecontrol.OriginalVersion;
 import com.nedap.archie.rm.ehr.EhrStatus;
@@ -35,6 +40,7 @@ import org.ehrbase.api.authorization.EhrbasePermission;
 import org.ehrbase.api.exception.InternalServerException;
 import org.ehrbase.api.exception.InvalidApiParameterException;
 import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.api.exception.ObjectNotFoundExceptionType;
 import org.ehrbase.api.exception.PreconditionFailedException;
 import org.ehrbase.api.service.EhrService;
 import org.ehrbase.response.openehr.EhrStatusResponseData;
@@ -124,7 +130,8 @@ public class OpenehrEhrStatusController extends BaseController implements EhrSta
                 ehrService.getEhrStatusAtVersion(ehrId, versionedObjectUid, version);
 
         UUID ehrStatusId = extractVersionedObjectUidFromVersionUid(ehrStatus
-                .orElseThrow(() -> new ObjectNotFoundException("ehr_status", "EHR_STATUS not found"))
+                .orElseThrow(() -> new ObjectNotFoundException(ObjectNotFoundExceptionType.EHR_STATUS.getType(),
+                        OpenehrDirectoryController.class, EHR_STATUS_NOT_FOUND))
                 .getUid()
                 .toString());
 
@@ -152,7 +159,7 @@ public class OpenehrEhrStatusController extends BaseController implements EhrSta
         String latestVersionUid = ehrService.getLatestVersionUidOfStatus(ehrId);
         versionUid = unwrap(versionUid, '"');
         if (!latestVersionUid.equals(versionUid)) {
-            throw new PreconditionFailedException("Given If-Match header does not match latest existing version");
+            throw new PreconditionFailedException(OpenehrEhrStatusController.class, GIVEN_IF_MATCH_HEADER_DOES_NOT_MATCH_LATEST_EXISTING_VERSION);
         }
 
         // update EHR_STATUS and check for success
@@ -162,7 +169,7 @@ public class OpenehrEhrStatusController extends BaseController implements EhrSta
         String newLatestVersionUid = ehrService.getLatestVersionUidOfStatus(ehrId);
         String[] split = latestVersionUid.split("::");
         if (latestVersionUid.equals(newLatestVersionUid) || split.length != 3) {
-            throw new InvalidApiParameterException("Update of EHR_STATUS failed");
+            throw new InvalidApiParameterException(OpenehrDirectoryController.class, UPDATE_OF_EHR_STATUS_FAILED);
         }
         int version = Integer.parseInt(split[split.length - 1]) + 1;
 
@@ -186,7 +193,8 @@ public class OpenehrEhrStatusController extends BaseController implements EhrSta
      */
     private void assertEhrExists(UUID ehrId) {
         if (!ehrService.hasEhr(ehrId)) {
-            throw new ObjectNotFoundException("EHR", "The EHR with the specified id does not exist");
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.EHR.getType(),
+                    OpenehrEhrStatusController.class, EHR_WITH_SPECIFIED_ID_DOES_NOT_EXIST);
         }
     }
 
@@ -263,7 +271,7 @@ public class OpenehrEhrStatusController extends BaseController implements EhrSta
                                         version));
                         respHeaders.setLocation(url);
                     } catch (Exception e) {
-                        throw new InternalServerException(e.getMessage());
+                        throw new InternalServerException(OpenehrEhrStatusController.class, EXCEPTION);
                     }
                     break;
                 case ETAG:

@@ -272,7 +272,7 @@ public class WhereVisitorTest {
 
         when(mock.expand(tp))
                 .thenThrow(
-                        new InternalServerException(
+                        new InternalServerException(WhereVisitorTest.class,
                                 "Terminology server operation failed:'Error response received from FHIR terminology server. "
                                         + "HTTP status: 404. Body: {\\\"resourceType\\\":\\\"OperationOutcome\\\",\\\"issue\\\":[{\\\"severity\\\":\\\"error\\\",\\\"code\\\":\\\"not-found\\\",\\\"diagnostics\\\":\\\""
                                         + "[5389b21a-d873-41d0-8c79-4390796c40bc]: Could not find value set http://hl7.org/fhir/ValueSet/animal-breeds. If this is an implicit value set please make sure the url is correct. "

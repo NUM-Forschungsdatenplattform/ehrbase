@@ -27,13 +27,16 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.ehrbase.api.exception.DuplicateObjectException;
 import org.ehrbase.api.exception.GeneralRequestProcessingException;
 import org.ehrbase.api.exception.InternalServerException;
 import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.api.exception.ObjectNotFoundExceptionType;
 import org.ehrbase.api.exception.StateConflictException;
 import org.ehrbase.response.ehrscape.CompositionFormat;
 import org.ehrbase.response.ehrscape.EhrStatusDto;
+
+import static org.ehrbase.api.exception.ExceptionsTemplate.EHR_WITH_ID_IS_NOT_FOUND;
+import static org.ehrbase.api.exception.ExceptionsTemplate.EHR_WITH_ID_DOES_NOT_ALLOW_MODIFICATION;
 
 public interface EhrService extends BaseService {
     /**
@@ -42,7 +45,7 @@ public interface EhrService extends BaseService {
      * @param ehrId Optional, sets custom ID
      * @param status Optional, sets custom status
      * @return UUID of new EHR instance
-     * @throws DuplicateObjectException when given party/subject already has an EHR
+     * @throws StateConflictException when given party/subject already has an EHR
      * @throws InternalServerException when unspecified error occurs
      */
     UUID create(UUID ehrId, EhrStatus status);
@@ -180,7 +183,8 @@ public interface EhrService extends BaseService {
      */
     default void checkEhrExists(UUID ehrId) {
         if (ehrId == null || !hasEhr(ehrId)) {
-            throw new ObjectNotFoundException("EHR", String.format("EHR with id %s not found", ehrId));
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.EHR.getType(), EhrService.class, EHR_WITH_ID_IS_NOT_FOUND,
+                    String.format(EHR_WITH_ID_IS_NOT_FOUND, ehrId));
         }
     }
 
@@ -194,11 +198,12 @@ public interface EhrService extends BaseService {
     default void checkEhrExistsAndIsModifiable(UUID ehrId) {
         Boolean modifiable = isModifiable(ehrId);
         if (modifiable == null) {
-            throw new ObjectNotFoundException("EHR", String.format("EHR with id %s not found", ehrId));
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.EHR.getType(), EhrService.class, EHR_WITH_ID_IS_NOT_FOUND,
+                    String.format(EHR_WITH_ID_IS_NOT_FOUND, ehrId));
         }
         if (!modifiable) {
-            throw new StateConflictException(
-                    String.format("EHR with id %s does not allow modification", ehrId.toString()));
+            throw new StateConflictException(EhrService.class,
+                    String.format(EHR_WITH_ID_DOES_NOT_ALLOW_MODIFICATION, ehrId.toString()));
         }
     }
 }

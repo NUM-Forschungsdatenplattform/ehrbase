@@ -17,6 +17,7 @@
  */
 package org.ehrbase.repository;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.NOT_MATCH_LATEST_VERSION;
 import static org.ehrbase.jooq.pg.tables.EhrFolder.EHR_FOLDER;
 import static org.ehrbase.jooq.pg.tables.EhrFolderHistory.EHR_FOLDER_HISTORY;
 
@@ -64,7 +65,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Repository
 public class EhrFolderRepository {
 
-    public static final String NOT_MATCH_LATEST_VERSION = "If-Match version_uid does not match latest version.";
     private final DSLContext context;
 
     private final TenantService tenantService;
@@ -149,7 +149,7 @@ public class EhrFolderRepository {
                     .filter(deleted -> deleted)
                     .isPresent();
             if (!isDeleted) {
-                throw new PreconditionFailedException(NOT_MATCH_LATEST_VERSION);
+                throw new PreconditionFailedException(EhrFolderRepository.class, NOT_MATCH_LATEST_VERSION);
             }
             delRecord = history.get();
             oldVersion = delRecord.getSysVersion();
@@ -167,12 +167,12 @@ public class EhrFolderRepository {
 
         // versions not consecutive
         if (oldVersion + 1 != rootFolder.getSysVersion()) {
-            throw new PreconditionFailedException(NOT_MATCH_LATEST_VERSION);
+            throw new PreconditionFailedException(EhrFolderRepository.class, NOT_MATCH_LATEST_VERSION);
         }
 
         // root ids do not match
         if (!rootId.equals(rootFolder.getId())) {
-            throw new PreconditionFailedException(NOT_MATCH_LATEST_VERSION);
+            throw new PreconditionFailedException(EhrFolderRepository.class, NOT_MATCH_LATEST_VERSION);
         }
 
         if (isDeleted) {
@@ -181,7 +181,7 @@ public class EhrFolderRepository {
             int updateCount = context.executeUpdate(delRecord);
             if (updateCount != 1) {
                 // concurrent modification
-                throw new PreconditionFailedException(NOT_MATCH_LATEST_VERSION);
+                throw new PreconditionFailedException(EhrFolderRepository.class, NOT_MATCH_LATEST_VERSION);
             }
 
         } else {
@@ -198,7 +198,7 @@ public class EhrFolderRepository {
 
             if (deleteCount == 0) {
                 // concurrent modification
-                throw new PreconditionFailedException(NOT_MATCH_LATEST_VERSION);
+                throw new PreconditionFailedException(EhrFolderRepository.class, NOT_MATCH_LATEST_VERSION);
             }
         }
 
@@ -293,12 +293,12 @@ public class EhrFolderRepository {
 
         Result<EhrFolderRecord> headFolders = getFolderHead(ehrId, ehrFoldersIdx);
         if (headFolders.isEmpty()) {
-            throw new PreconditionFailedException(NOT_MATCH_LATEST_VERSION);
+            throw new PreconditionFailedException(EhrFolderRepository.class, NOT_MATCH_LATEST_VERSION);
         }
 
         EhrFolderRecord headRoot = findRoot(headFolders);
         if (headRoot.getSysVersion() != version || !headRoot.getId().equals(rootFolderId)) {
-            throw new PreconditionFailedException(NOT_MATCH_LATEST_VERSION);
+            throw new PreconditionFailedException(EhrFolderRepository.class, NOT_MATCH_LATEST_VERSION);
         }
 
         // timestamp for sysPeriod
@@ -344,7 +344,7 @@ public class EhrFolderRepository {
 
         if (deleteCount == 0) {
             // concurrent modification
-            throw new PreconditionFailedException(NOT_MATCH_LATEST_VERSION);
+            throw new PreconditionFailedException(EhrFolderRepository.class, NOT_MATCH_LATEST_VERSION);
         }
     }
 

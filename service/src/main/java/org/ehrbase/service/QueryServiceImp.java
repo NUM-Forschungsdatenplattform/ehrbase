@@ -18,6 +18,16 @@
 package org.ehrbase.service;
 
 import static java.lang.String.format;
+import static org.ehrbase.api.exception.ExceptionsTemplate.A_QUALIFIED_VERSION_HAS_TO_BE_SPECIFIED;
+import static org.ehrbase.api.exception.ExceptionsTemplate.BAD_GATEWAY_EXCEPTION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.COULD_NOT_RETRIEVE_STORED_QUERY_FOR_QUALIFIED_NAME;
+import static org.ehrbase.api.exception.ExceptionsTemplate.DATA_ACCESS_ERROR;
+import static org.ehrbase.api.exception.ExceptionsTemplate.EXCEPTION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.INCORRECT_VERSION_USE_THE_SEMVER_FORMAT;
+import static org.ehrbase.api.exception.ExceptionsTemplate.PRE_RELEASE_WAS_PROVIDED_WHEN_WAS_REQUESTED;
+import static org.ehrbase.api.exception.ExceptionsTemplate.RUNTIME_EXCEPTION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.VERSION_ALREADY_EXISTS;
+import static org.ehrbase.api.exception.ExceptionsTemplate.VERSION_WAS_PROVIDED_WHEN_PRE_RELEASE_WAS_REQUESTED;
 
 import com.google.gson.JsonElement;
 import java.sql.Timestamp;
@@ -37,6 +47,7 @@ import org.ehrbase.api.exception.GeneralRequestProcessingException;
 import org.ehrbase.api.exception.InternalServerException;
 import org.ehrbase.api.exception.InvalidApiParameterException;
 import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.api.exception.ObjectNotFoundExceptionType;
 import org.ehrbase.api.exception.StateConflictException;
 import org.ehrbase.api.service.QueryService;
 import org.ehrbase.api.service.TenantService;
@@ -148,11 +159,10 @@ public class QueryServiceImp extends BaseServiceImp implements QueryService {
             auditResultMap.putAll(aqlResult.getAuditResultMap());
             return formatResult(aqlResult, queryString, explain);
         } catch (RestClientException e) {
-            throw new BadGatewayException(
-                    "Bad gateway exception: " + e.getCause().getMessage());
+            throw new BadGatewayException(QueryServiceImp.class, BAD_GATEWAY_EXCEPTION);
         } catch (DataAccessException e) {
             throw new GeneralRequestProcessingException(
-                    "Data Access Error: " + e.getCause().getMessage());
+                    QueryServiceImp.class, DATA_ACCESS_ERROR);
         } catch (IllegalArgumentException e) {
             throw e;
         } catch (RuntimeException e) {
@@ -171,7 +181,7 @@ public class QueryServiceImp extends BaseServiceImp implements QueryService {
                     .toList();
         } catch (DataAccessException e) {
             throw new GeneralRequestProcessingException(
-                    "Data Access Error: " + e.getCause().getMessage(), e);
+                    QueryServiceImp.class, DATA_ACCESS_ERROR);
         } catch (IllegalArgumentException e) {
             throw e;
         } catch (RuntimeException e) {
@@ -188,9 +198,9 @@ public class QueryServiceImp extends BaseServiceImp implements QueryService {
             storedQueryAccess = StoredQueryAccess.retrieveQualified(getDataAccess(), qualifiedName, requestedVersion);
         } catch (DataAccessException e) {
             throw new GeneralRequestProcessingException(
-                    "Data Access Error: " + e.getCause().getMessage(), e);
+                    QueryServiceImp.class, DATA_ACCESS_ERROR);
         } catch (RuntimeException e) {
-            throw new InternalServerException(e.getMessage());
+            throw new InternalServerException(QueryServiceImp.class, EXCEPTION);
         }
 
         return storedQueryAccess
@@ -235,7 +245,7 @@ public class QueryServiceImp extends BaseServiceImp implements QueryService {
             }
         } catch (DataAccessException e) {
             throw new GeneralRequestProcessingException(
-                    "Data Access Error: " + e.getCause().getMessage(), e);
+                    QueryServiceImp.class, DATA_ACCESS_ERROR);
         } catch (VersionConflictException e) {
             throw new IllegalArgumentException(e.getMessage(), e);
         }
@@ -250,17 +260,15 @@ public class QueryServiceImp extends BaseServiceImp implements QueryService {
 
         } else if (dbSemVer.isPreRelease()) {
             if (!requestSemVer.isPreRelease()) {
-                throw new RuntimeException(
-                        "Pre-release " + dbSemVer + " was provided when " + requestSemVer + " was requested");
+                throw new RuntimeException( String.format(PRE_RELEASE_WAS_PROVIDED_WHEN_WAS_REQUESTED, dbSemVer, requestSemVer));
             }
         } else {
             // release
             if (requestSemVer.isPreRelease()) {
-                throw new RuntimeException(
-                        "Version " + dbSemVer + " was provided when pre-release " + requestSemVer + " was requested");
+                throw new RuntimeException(VERSION_WAS_PROVIDED_WHEN_PRE_RELEASE_WAS_REQUESTED.formatted(dbSemVer, requestSemVer));
 
             } else if (requestSemVer.isRelease()) {
-                throw new StateConflictException("Version already exists");
+                throw new StateConflictException(QueryServiceImp.class, VERSION_ALREADY_EXISTS);
             }
         }
     }
@@ -270,16 +278,15 @@ public class QueryServiceImp extends BaseServiceImp implements QueryService {
 
         SemVer requestedVersion = parseRequestSemVer(version);
         if (requestedVersion.isNoVersion() || requestedVersion.isPartial()) {
-            throw new InvalidApiParameterException("A qualified version has to be specified");
+            throw new InvalidApiParameterException(QueryServiceImp.class, A_QUALIFIED_VERSION_HAS_TO_BE_SPECIFIED);
         }
 
         try {
             I_StoredQueryAccess storedQueryAccess = StoredQueryAccess.retrieveQualified(
                             getDataAccess(), qualifiedName, requestedVersion)
-                    .orElseThrow(() -> new ObjectNotFoundException(
-                            "stored query",
-                            "Could not retrieve stored query for qualified name: " + qualifiedName + " version:"
-                                    + version));
+                    .orElseThrow(() -> new ObjectNotFoundException(ObjectNotFoundExceptionType.STORED_QUERY.getType(),
+                            QueryServiceImp.class, COULD_NOT_RETRIEVE_STORED_QUERY_FOR_QUALIFIED_NAME,
+                            COULD_NOT_RETRIEVE_STORED_QUERY_FOR_QUALIFIED_NAME.formatted(qualifiedName, version)));
 
             storedQueryAccess.delete();
             return mapToQueryDefinitionDto(storedQueryAccess);
@@ -287,9 +294,9 @@ public class QueryServiceImp extends BaseServiceImp implements QueryService {
             throw e;
         } catch (DataAccessException dae) {
             throw new GeneralRequestProcessingException(
-                    "Data Access Error:" + dae.getCause().getMessage());
+                    QueryServiceImp.class, DATA_ACCESS_ERROR);
         } catch (RuntimeException e) {
-            throw new InternalServerException(e.getMessage());
+            throw new InternalServerException(QueryServiceImp.class, RUNTIME_EXCEPTION);
         }
     }
 
@@ -297,7 +304,7 @@ public class QueryServiceImp extends BaseServiceImp implements QueryService {
         try {
             return SemVer.parse(version);
         } catch (InvalidVersionFormatException e) {
-            throw new InvalidApiParameterException("Incorrect version. Use the SEMVER format.", e);
+            throw new InvalidApiParameterException(QueryServiceImp.class, INCORRECT_VERSION_USE_THE_SEMVER_FORMAT);
         }
     }
 

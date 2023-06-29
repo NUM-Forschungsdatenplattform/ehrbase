@@ -29,6 +29,7 @@ import org.ehrbase.api.annotations.TenantAware;
 import org.ehrbase.api.authorization.EhrbaseAuthorization;
 import org.ehrbase.api.authorization.EhrbasePermission;
 import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.api.exception.ObjectNotFoundExceptionType;
 import org.ehrbase.api.service.CompositionService;
 import org.ehrbase.api.service.EhrService;
 import org.ehrbase.response.openehr.admin.AdminDeleteResponseData;
@@ -41,6 +42,8 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import static org.ehrbase.api.exception.ExceptionsTemplate.EHR_WITH_ID_DOES_NOT_EXIST;
 
 /**
  * Admin API controller for Composition related data. Provides endpoint to remove compositions physically from database.
@@ -96,8 +99,8 @@ public class AdminCompositionController extends BaseController {
 
         // Check if EHR exists
         if (!ehrService.hasEhr(ehrUuid)) {
-            throw new ObjectNotFoundException(
-                    "Admin Composition", String.format("EHR with id %s does not exist.", ehrId));
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.ADMIN_COMPOSITION.getType(), AdminCompositionController.class,
+                    EHR_WITH_ID_DOES_NOT_EXIST, String.format(EHR_WITH_ID_DOES_NOT_EXIST, ehrId));
         }
 
         UUID compositionUid = UUID.fromString(compositionId);

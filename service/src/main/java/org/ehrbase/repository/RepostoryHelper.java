@@ -26,6 +26,8 @@ import org.jooq.Loader;
 import org.jooq.Record;
 import org.jooq.Table;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.IO_EXCEPTION;
+
 /**
  * @author Stefan Spiska
  */
@@ -48,12 +50,12 @@ public class RepostoryHelper {
 
             if (!execute.result().errors().isEmpty()) {
 
-                throw new InternalServerException(execute.result().errors().stream()
+                throw new InternalServerException(RepostoryHelper.class, execute.result().errors().stream()
                         .map(e -> e.exception().getMessage())
                         .collect(Collectors.joining(";")));
             }
         } catch (IOException e) {
-            throw new InternalServerException(e);
+            throw new InternalServerException(RepostoryHelper.class, IO_EXCEPTION);
         }
     }
 }

@@ -17,20 +17,20 @@
  */
 package org.ehrbase.service;
 
-import com.nedap.archie.rm.RMObject;
-import com.nedap.archie.rm.archetyped.TemplateId;
-import com.nedap.archie.rm.changecontrol.Version;
-import com.nedap.archie.rm.composition.Composition;
-import com.nedap.archie.rm.datatypes.CodePhrase;
-import com.nedap.archie.rm.datavalues.DvCodedText;
-import com.nedap.archie.rm.datavalues.DvText;
-import com.nedap.archie.rm.datavalues.quantity.datetime.DvDateTime;
-import com.nedap.archie.rm.directory.Folder;
-import com.nedap.archie.rm.ehr.EhrStatus;
-import com.nedap.archie.rm.generic.AuditDetails;
-import com.nedap.archie.rm.generic.PartyProxy;
-import com.nedap.archie.rm.support.identification.ObjectVersionId;
-import com.nedap.archie.rm.support.identification.TerminologyId;
+import static org.ehrbase.api.exception.ExceptionsTemplate.CHANGE_TYPE_IS_NOT_VALID;
+import static org.ehrbase.api.exception.ExceptionsTemplate.CONTRIBUTION_WITH_GIVEN_ID_DOES_NOT_EXIST;
+import static org.ehrbase.api.exception.ExceptionsTemplate.COULD_NOT_FIND_OBJECT_MATCHING_ID;
+import static org.ehrbase.api.exception.ExceptionsTemplate.GIVEN_PRECEDING_VERSION_UID_FOR_COMPOSITION_OBJECT_DOES_NOT_MATCH_LATEST_EXISTING_VERSION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.GIVEN_PRECEDING_VERSION_UID_FOR_EHR_STATUS_OBJECT_DOES_NOT_MATCH_LATEST_EXISTING_VERSION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.INVALID_CHANGE_TYPE;
+import static org.ehrbase.api.exception.ExceptionsTemplate.INVALID_CHANGE_TYPE_EHR_STATUS_CAN_T_BE_CREATED;
+import static org.ehrbase.api.exception.ExceptionsTemplate.INVALID_CHANGE_TYPE_EHR_STATUS_CAN_T_BE_DELETED;
+import static org.ehrbase.api.exception.ExceptionsTemplate.INVALID_CONTRIBUTION_MUST_HAVE_ONE_VERSION_OBJECT;
+import static org.ehrbase.api.exception.ExceptionsTemplate.INVALID_VERSION_CHANGE_TYPE_CREATION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.INVALID_VERSION_CHANGE_TYPE_MODIFICATION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.INVALID_VERSION_OBJECT_IN_CONTRIBUTION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.NO_EHR_FOUND_WITH_GIVEN_ID;
+
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.HashMap;
@@ -41,10 +41,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+
 import org.ehrbase.api.definitions.ServerConfig;
 import org.ehrbase.api.exception.InternalServerException;
 import org.ehrbase.api.exception.InvalidApiParameterException;
 import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.api.exception.ObjectNotFoundExceptionType;
 import org.ehrbase.api.exception.PreconditionFailedException;
 import org.ehrbase.api.exception.UnexpectedSwitchCaseException;
 import org.ehrbase.api.exception.UnprocessableEntityException;
@@ -70,6 +72,21 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.nedap.archie.rm.RMObject;
+import com.nedap.archie.rm.archetyped.TemplateId;
+import com.nedap.archie.rm.changecontrol.Version;
+import com.nedap.archie.rm.composition.Composition;
+import com.nedap.archie.rm.datatypes.CodePhrase;
+import com.nedap.archie.rm.datavalues.DvCodedText;
+import com.nedap.archie.rm.datavalues.DvText;
+import com.nedap.archie.rm.datavalues.quantity.datetime.DvDateTime;
+import com.nedap.archie.rm.directory.Folder;
+import com.nedap.archie.rm.ehr.EhrStatus;
+import com.nedap.archie.rm.generic.AuditDetails;
+import com.nedap.archie.rm.generic.PartyProxy;
+import com.nedap.archie.rm.support.identification.ObjectVersionId;
+import com.nedap.archie.rm.support.identification.TerminologyId;
 
 @Service
 @Transactional
@@ -116,7 +133,9 @@ public class ContributionServiceImp extends BaseServiceImp implements Contributi
     public boolean hasContribution(UUID ehrId, UUID contributionId) {
         // pre-step: check for valid ehrId
         if (!ehrService.hasEhr(ehrId)) {
-            throw new ObjectNotFoundException("ehr", "No EHR found with given ID: " + ehrId.toString());
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.EHR.getType(),
+                    ContributionServiceImp.class, NO_EHR_FOUND_WITH_GIVEN_ID,
+                    String.format(NO_EHR_FOUND_WITH_GIVEN_ID, ehrId.toString()));
         }
 
         I_ContributionAccess contributionAccess;
@@ -140,7 +159,8 @@ public class ContributionServiceImp extends BaseServiceImp implements Contributi
     public Optional<ContributionDto> getContribution(UUID ehrId, UUID contributionId) {
         // pre-step: check for valid ehr and contribution ID
         if (!hasContribution(ehrId, contributionId)) {
-            throw new ObjectNotFoundException("contribution", "Contribution with given ID does not exist");
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.CONTRIBUTION.getType(),
+                    ContributionServiceImp.class, CONTRIBUTION_WITH_GIVEN_ID_DOES_NOT_EXIST);
         }
 
         ContributionDto contribution = new ContributionDto(
@@ -159,7 +179,9 @@ public class ContributionServiceImp extends BaseServiceImp implements Contributi
 
         // pre-step: check for valid ehrId
         if (!ehrService.hasEhr(ehrId)) {
-            throw new ObjectNotFoundException("ehr", "No EHR found with given ID: " + ehrId.toString());
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.EHR.getType(),
+                    ContributionServiceImp.class, NO_EHR_FOUND_WITH_GIVEN_ID,
+                    String.format(NO_EHR_FOUND_WITH_GIVEN_ID, ehrId.toString()));
         }
 
         String tenantIdentifier = tenantService.getCurrentTenantIdentifier();
@@ -175,7 +197,7 @@ public class ContributionServiceImp extends BaseServiceImp implements Contributi
         List<Version> versions = ContributionServiceHelper.parseVersions(content, format);
 
         if (versions.isEmpty()) {
-            throw new InvalidApiParameterException("Invalid Contribution, must have at least one Version object.");
+            throw new InvalidApiParameterException(ContributionServiceImp.class, INVALID_CONTRIBUTION_MUST_HAVE_ONE_VERSION_OBJECT);
         }
 
         // go through those RM objects and execute the action of it (as listed in its audit) and connect it to new
@@ -202,15 +224,15 @@ public class ContributionServiceImp extends BaseServiceImp implements Contributi
                     versionClass = SupportedClasses.valueOf(
                             versionRmObject.getClass().getSimpleName().toUpperCase());
                 } catch (Exception e) {
-                    throw new InvalidApiParameterException("Invalid version object in contribution. "
-                            + versionRmObject.getClass().getSimpleName().toUpperCase() + " not supported.");
+                    throw new InvalidApiParameterException(ContributionServiceImp.class, INVALID_VERSION_OBJECT_IN_CONTRIBUTION,
+                            String.format(INVALID_VERSION_OBJECT_IN_CONTRIBUTION, versionRmObject.getClass().getSimpleName().toUpperCase()));
                 }
                 switch (versionClass) {
                     case COMPOSITION:
                         try {
                             processCompositionVersion(ehrId, contributionId, version, (Composition) versionRmObject);
                         } catch (UnprocessableEntityException e) {
-                            throw new ValidationException(e.getMessage());
+                            throw new ValidationException(ContributionServiceImp.class, e.getMessage());
                         }
                         break;
                     case EHRSTATUS:
@@ -220,7 +242,7 @@ public class ContributionServiceImp extends BaseServiceImp implements Contributi
                         processFolderVersion(ehrId, contributionId, version, (Folder) versionRmObject);
                         break;
                     default:
-                        throw new UnexpectedSwitchCaseException(versionClass);
+                        throw new UnexpectedSwitchCaseException(UnexpectedSwitchCaseException.class, UnexpectedSwitchCaseException.formatMessage(versionClass));
                 }
             } else { // version doesn't contain "data", so it is only a metadata one to, for instance, delete a specific
                 // object
@@ -272,7 +294,7 @@ public class ContributionServiceImp extends BaseServiceImp implements Contributi
             case UNKNOWN: // TODO
             default: // TODO keep as long as above has TODOs. Check of valid change type is done in
                 // checkContributionRules
-                throw new UnexpectedSwitchCaseException(changeType);
+                throw new UnexpectedSwitchCaseException(UnexpectedSwitchCaseException.class, UnexpectedSwitchCaseException.formatMessage(changeType));
         }
     }
 
@@ -283,8 +305,7 @@ public class ContributionServiceImp extends BaseServiceImp implements Contributi
         // remove version number after "::" and add queried version number to compare with given one
         String actualPreceding = id.substring(0, id.lastIndexOf("::") + 2).concat(latestVersion.toString());
         if (!actualPreceding.equals(version.getPrecedingVersionUid().toString())) {
-            throw new PreconditionFailedException(
-                    "Given preceding_version_uid for COMPOSITION object does not match latest existing version");
+            throw new PreconditionFailedException(ContributionServiceImp.class, GIVEN_PRECEDING_VERSION_UID_FOR_COMPOSITION_OBJECT_DOES_NOT_MATCH_LATEST_EXISTING_VERSION);
         }
         return actualPreceding;
     }
@@ -309,7 +330,7 @@ public class ContributionServiceImp extends BaseServiceImp implements Contributi
             case CREATION:
                 // call creation of a new status with given input is not possible as it is linked to and created through
                 // an EHR object
-                throw new InvalidApiParameterException("Invalid change type. EHR_STATUS can't be manually created.");
+                throw new InvalidApiParameterException(ContributionServiceImp.class, INVALID_CHANGE_TYPE_EHR_STATUS_CAN_T_BE_CREATED);
             case AMENDMENT: // triggers the same processing as modification // TODO-396: so far so good, but should use
                 // the type
                 // "AMENDMENT" for audit in access layer
@@ -317,20 +338,19 @@ public class ContributionServiceImp extends BaseServiceImp implements Contributi
                 // preceding_version_uid check
                 String latestVersionUid = ehrService.getLatestVersionUidOfStatus(ehrId);
                 if (!latestVersionUid.equals(version.getPrecedingVersionUid().toString())) {
-                    throw new PreconditionFailedException(
-                            "Given preceding_version_uid for EHR_STATUS object does not match latest existing version");
+                    throw new PreconditionFailedException(ContributionServiceImp.class, GIVEN_PRECEDING_VERSION_UID_FOR_EHR_STATUS_OBJECT_DOES_NOT_MATCH_LATEST_EXISTING_VERSION);
                 }
                 // call modification of the given status
                 ehrService.updateStatus(ehrId, versionRmObject, contributionId);
                 break;
             case DELETED:
                 // deleting a STATUS versioned object is invalid
-                throw new InvalidApiParameterException("Invalid change type. EHR_STATUS can't be deleted.");
+                throw new InvalidApiParameterException(ContributionServiceImp.class, INVALID_CHANGE_TYPE_EHR_STATUS_CAN_T_BE_DELETED);
             case SYNTHESIS: // TODO
             case UNKNOWN: // TODO
             default: // TODO keep as long as above has TODOs. Check of valid change type is done in
                 // checkContributionRules
-                throw new UnexpectedSwitchCaseException(changeType);
+                throw new UnexpectedSwitchCaseException(UnexpectedSwitchCaseException.class, UnexpectedSwitchCaseException.formatMessage(changeType));
         }
     }
 
@@ -366,7 +386,7 @@ public class ContributionServiceImp extends BaseServiceImp implements Contributi
             case UNKNOWN: // TODO
             default: // TODO keep as long as above has TODOs. Check of valid change type is done in
                 // checkContributionRules
-                throw new UnexpectedSwitchCaseException(changeType);
+                throw new UnexpectedSwitchCaseException(UnexpectedSwitchCaseException.class, UnexpectedSwitchCaseException.formatMessage(changeType));
         }
     }
 
@@ -386,16 +406,14 @@ public class ContributionServiceImp extends BaseServiceImp implements Contributi
             case CREATION:
                 // can't have change type CREATION and a given "preceding_version_uid"
                 if (version.getPrecedingVersionUid() != null) {
-                    throw new InvalidApiParameterException(
-                            "Invalid version. Change type CREATION, but also set \"preceding_version_uid\" attribute");
+                    throw new InvalidApiParameterException(ContributionServiceImp.class, INVALID_VERSION_CHANGE_TYPE_CREATION);
                 }
                 break;
             case MODIFICATION:
             case AMENDMENT:
                 // can't have change type MODIFICATION and without giving "preceding_version_uid"
                 if (version.getPrecedingVersionUid() == null) {
-                    throw new InvalidApiParameterException(
-                            "Invalid version. Change type MODIFICATION, but without \"preceding_version_uid\" attribute");
+                    throw new InvalidApiParameterException(ContributionServiceImp.class, INVALID_VERSION_CHANGE_TYPE_MODIFICATION);
                 }
                 break;
                 // block of valid change types, without any rules to apply (yet)
@@ -405,7 +423,8 @@ public class ContributionServiceImp extends BaseServiceImp implements Contributi
                 break;
                 // invalid change type
             default:
-                throw new InvalidApiParameterException("Change type \"" + changeType + "\" not valid");
+                throw new InvalidApiParameterException(ContributionServiceImp.class, CHANGE_TYPE_IS_NOT_VALID,
+                        String.format(CHANGE_TYPE_IS_NOT_VALID, changeType));
         }
     }
 
@@ -447,8 +466,7 @@ public class ContributionServiceImp extends BaseServiceImp implements Contributi
                         // and throwing specific error
                         Optional.of(ehrService.getEhrStatus(ehrId)).ifPresent(st -> {
                             if (st.getUid().equals(version.getPrecedingVersionUid())) {
-                                throw new InvalidApiParameterException(
-                                        "Invalid change type. EHR_STATUS can't be deleted.");
+                                throw new InvalidApiParameterException(ContributionServiceImp.class, INVALID_CHANGE_TYPE);
                             }
                         });
 
@@ -457,10 +475,9 @@ public class ContributionServiceImp extends BaseServiceImp implements Contributi
                         //  implemented
                         // TODO last "try catch" in line needs to rethrow for real, as then no matching object would
                         // have been found
-                        throw new ObjectNotFoundException(
-                                Composition.class.getName(),
-                                "Couldn't find object matching id: "
-                                        + objectUid); // TODO: type is technically wrong, if
+                        throw new ObjectNotFoundException(Composition.class.getName(),
+                                ContributionServiceImp.class, COULD_NOT_FIND_OBJECT_MATCHING_ID,
+                                String.format(COULD_NOT_FIND_OBJECT_MATCHING_ID, objectUid)); // TODO: type is technically wrong, if
                         // more than one type gets tested
                     }
                 }
@@ -471,7 +488,7 @@ public class ContributionServiceImp extends BaseServiceImp implements Contributi
             case MODIFICATION: // not expected in a metadata version (i.e. without payload)
             case AMENDMENT: // not expected in a metadata version (i.e. without payload)
             default:
-                throw new UnexpectedSwitchCaseException(changeType);
+                throw new UnexpectedSwitchCaseException(UnexpectedSwitchCaseException.class, UnexpectedSwitchCaseException.formatMessage(changeType));
         }
     }
 
@@ -596,8 +613,8 @@ public class ContributionServiceImp extends BaseServiceImp implements Contributi
                     versionClass = SupportedClasses.valueOf(
                             versionRmObject.getClass().getSimpleName().toUpperCase());
                 } catch (Exception e) {
-                    throw new InvalidApiParameterException("Invalid version object in contribution. "
-                            + versionRmObject.getClass().getSimpleName().toUpperCase() + " not supported.");
+                    throw new InvalidApiParameterException(ContributionServiceImp.class, INVALID_VERSION_OBJECT_IN_CONTRIBUTION,
+                            String.format(INVALID_VERSION_OBJECT_IN_CONTRIBUTION, versionRmObject.getClass().getSimpleName().toUpperCase()));
                 }
                 switch (versionClass) {
                     case COMPOSITION:

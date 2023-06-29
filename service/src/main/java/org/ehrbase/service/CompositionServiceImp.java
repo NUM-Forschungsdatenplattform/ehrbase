@@ -43,6 +43,7 @@ import org.ehrbase.api.definitions.ServerConfig;
 import org.ehrbase.api.exception.InternalServerException;
 import org.ehrbase.api.exception.InvalidApiParameterException;
 import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.api.exception.ObjectNotFoundExceptionType;
 import org.ehrbase.api.exception.UnexpectedSwitchCaseException;
 import org.ehrbase.api.exception.UnprocessableEntityException;
 import org.ehrbase.api.exception.ValidationException;
@@ -72,6 +73,21 @@ import org.slf4j.LoggerFactory;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import static org.ehrbase.api.exception.ExceptionsTemplate.CANNOT_UPDATE_COMPOSITION_TO_HAVE_DIFFERENT_TEMPLATE;
+import static org.ehrbase.api.exception.ExceptionsTemplate.CANNOT_UPDATE_COMPOSITION_WITH_WRONG_TEMPLATE_VERSION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.COULD_NOT_FIND_COMPOSITION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.DELETE_FAILED_ON_COMPOSITION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.EHR_WITH_ID_DOES_NOT_CONTAIN_COMPOSITION_WITH_ID;
+import static org.ehrbase.api.exception.ExceptionsTemplate.ERROR_ON_INTERNAL_CONTRIBUTION_HANDLING_FOR_COMPOSITION_CREATION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.ERROR_WHILE_RETRIEVING_COMPOSITION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.EXCEPTION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.FAILED_TO_UPDATE_COMPOSITION_MISSING_MANDATORY_AUDIT_META_DATA;
+import static org.ehrbase.api.exception.ExceptionsTemplate.INCONSISTENT_COMPOSITION_DATA_NO_VERSION_1_AVAILABLE;
+import static org.ehrbase.api.exception.ExceptionsTemplate.INVALID_VERSION_NUMBER_CALCULATED;
+import static org.ehrbase.api.exception.ExceptionsTemplate.NO_VERSIONED_COMPOSITION_WITH_GIVEN_VERSION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.PROBLEM_CREATING_REVISION_HISTORY;
+import static org.ehrbase.api.exception.ExceptionsTemplate.UPDATE_FAILED_ON_COMPOSITION;
 
 /**
  * {@link CompositionService} implementation.
@@ -153,13 +169,13 @@ public class CompositionServiceImp extends BaseServiceImp implements Composition
             validationService.check(composition);
 
         } catch (org.ehrbase.validation.ValidationException e) {
-            throw new UnprocessableEntityException(e.getMessage());
+            throw new UnprocessableEntityException(CompositionServiceImp.class, e.getMessage());
         } catch (UnprocessableEntityException | ValidationException e) {
             throw e;
         } catch (IllegalArgumentException e) {
-            throw new ValidationException(e);
+            throw new ValidationException(CompositionServiceImp.class, e.getMessage());
         } catch (Exception e) {
-            throw new InternalServerException(e);
+            throw new InternalServerException(CompositionServiceImp.class, EXCEPTION);
         }
 
         // actual creation
@@ -183,15 +199,15 @@ public class CompositionServiceImp extends BaseServiceImp implements Composition
                 compositionId = compositionAccess.commit(LocalDateTime.now(), contributionId);
             } else { // else, invoke commit that ad hoc creates a new contribution for the composition
                 if (committerId == null || systemId == null) { // mandatory fields
-                    throw new InternalServerException(
-                            "Error on internal contribution handling for composition creation.");
+                    throw new InternalServerException(CompositionServiceImp.class,
+                            ERROR_ON_INTERNAL_CONTRIBUTION_HANDLING_FOR_COMPOSITION_CREATION);
                 }
                 compositionId = compositionAccess.commit(LocalDateTime.now(), committerId, systemId, description);
             }
         } catch (IllegalArgumentException e) {
             throw e;
         } catch (Exception e) {
-            throw new InternalServerException(e);
+            throw new InternalServerException(CompositionServiceImp.class, EXCEPTION);
         }
 
         logger.debug("Composition created: id={}", compositionId);
@@ -261,8 +277,9 @@ public class CompositionServiceImp extends BaseServiceImp implements Composition
         try {
             var compositionAccess = I_CompositionAccess.retrieveInstance(getDataAccess(), compositionId);
             if (compositionAccess == null) {
-                throw new ObjectNotFoundException(
-                        I_CompositionAccess.class.getName(), "Could not find composition: " + compositionId);
+                throw new ObjectNotFoundException(I_CompositionAccess.class.getName(),
+                        ContributionServiceImp.class, COULD_NOT_FIND_COMPOSITION,
+                        COULD_NOT_FIND_COMPOSITION.formatted(compositionId));
             }
             // check that the  composition is actually in the ehr
             checkCompositionIsInEhr(ehrId, compositionAccess);
@@ -277,7 +294,7 @@ public class CompositionServiceImp extends BaseServiceImp implements Composition
             if (!existingTemplateId.equals(inputTemplateId)) {
                 // check if base template ID doesn't match  (template ID schema: "$NAME.$LANG.v$VER")
                 if (!existingTemplateId.split("\\.")[0].equals(inputTemplateId.split("\\.")[0])) {
-                    throw new InvalidApiParameterException("Can't update composition to have different template.");
+                    throw new InvalidApiParameterException(CompositionServiceImp.class, CANNOT_UPDATE_COMPOSITION_TO_HAVE_DIFFERENT_TEMPLATE);
                 }
                 // if base matches, check if given template ID is just a new version of the correct template
                 int existingTemplateIdVersion =
@@ -285,8 +302,8 @@ public class CompositionServiceImp extends BaseServiceImp implements Composition
                 int inputTemplateIdVersion =
                         Integer.parseInt(inputTemplateId.substring(inputTemplateId.lastIndexOf("\\.v") + 1));
                 if (inputTemplateIdVersion < existingTemplateIdVersion) {
-                    throw new InvalidApiParameterException(
-                            "Can't update composition with wrong template version bump.");
+                    throw new InvalidApiParameterException(CompositionServiceImp.class,
+                            CANNOT_UPDATE_COMPOSITION_WITH_WRONG_TEMPLATE_VERSION);
                 }
             }
 
@@ -301,8 +318,7 @@ public class CompositionServiceImp extends BaseServiceImp implements Composition
                 result = compositionAccess.update(LocalDateTime.now(), contributionId);
             } else { // else existing one will be updated
                 if (committerId == null || systemId == null) {
-                    throw new InternalServerException(
-                            "Failed to update composition, missing mandatory audit meta data.");
+                    throw new InternalServerException(CompositionServiceImp.class, FAILED_TO_UPDATE_COMPOSITION_MISSING_MANDATORY_AUDIT_META_DATA);
                 }
                 result = compositionAccess.update(
                         LocalDateTime.now(), committerId, systemId, description, ContributionChangeType.MODIFICATION);
@@ -313,21 +329,21 @@ public class CompositionServiceImp extends BaseServiceImp implements Composition
                         e) { // otherwise exceptions would always get sucked up by the catch below
             throw e;
         } catch (Exception e) {
-            throw new InternalServerException(e);
+            throw new InternalServerException(CompositionServiceImp.class, EXCEPTION);
         }
 
         if (!result) {
-            throw new InternalServerException("Update failed on composition:" + compositionId);
+            throw new InternalServerException(CompositionServiceImp.class, UPDATE_FAILED_ON_COMPOSITION,
+                    String.format(UPDATE_FAILED_ON_COMPOSITION, compositionId));
         }
         return compositionId;
     }
 
     private void checkCompositionIsInEhr(UUID ehrId, I_CompositionAccess compositionAccess) {
         if (!ehrId.equals(compositionAccess.getEhrid())) {
-            throw new ObjectNotFoundException(
-                    "COMPOSITION",
-                    String.format(
-                            "EHR with id %s does not contain composition with id %s",
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.COMPOSITION.getType(),
+                    ContributionServiceImp.class, EHR_WITH_ID_DOES_NOT_CONTAIN_COMPOSITION_WITH_ID,
+                    String.format(EHR_WITH_ID_DOES_NOT_CONTAIN_COMPOSITION_WITH_ID,
                             ehrId, compositionAccess.getEhrid()));
         }
     }
@@ -368,12 +384,14 @@ public class CompositionServiceImp extends BaseServiceImp implements Composition
         try {
             compositionAccess = I_CompositionAccess.retrieveInstance(getDataAccess(), compositionId);
         } catch (Exception e) {
-            throw new ObjectNotFoundException(
-                    I_CompositionAccess.class.getName(), "Error while retrieving composition", e);
+            throw new ObjectNotFoundException(I_CompositionAccess.class.getName(),
+                    ContributionServiceImp.class,
+                    ERROR_WHILE_RETRIEVING_COMPOSITION);
         }
         if (compositionAccess == null) {
-            throw new ObjectNotFoundException(
-                    I_CompositionAccess.class.getName(), "Could not find composition:" + compositionId);
+            throw new ObjectNotFoundException(I_CompositionAccess.class.getName(),
+                    ContributionServiceImp.class, COULD_NOT_FIND_COMPOSITION,
+                    COULD_NOT_FIND_COMPOSITION.formatted(compositionId));
         }
         // check that the  composition is actually in the ehr
         checkCompositionIsInEhr(ehrId, compositionAccess);
@@ -384,21 +402,22 @@ public class CompositionServiceImp extends BaseServiceImp implements Composition
             try {
                 result = compositionAccess.delete(LocalDateTime.now(), contributionId);
             } catch (Exception e) {
-                throw new InternalServerException(e);
+                throw new InternalServerException(CompositionServiceImp.class, EXCEPTION);
             }
         } else { // if not continue with standard delete
             try {
                 if (committerId == null || systemId == null) {
-                    throw new InternalServerException(
-                            "Failed to update composition, missing mandatory audit meta data.");
+                    throw new InternalServerException(CompositionServiceImp.class,
+                            FAILED_TO_UPDATE_COMPOSITION_MISSING_MANDATORY_AUDIT_META_DATA);
                 }
                 result = compositionAccess.delete(LocalDateTime.now(), committerId, systemId, description);
             } catch (Exception e) {
-                throw new InternalServerException(e);
+                throw new InternalServerException(CompositionServiceImp.class, EXCEPTION);
             }
         }
         if (result <= 0) {
-            throw new InternalServerException("Delete failed on composition:" + compositionAccess.getId());
+            throw new InternalServerException(CompositionServiceImp.class, DELETE_FAILED_ON_COMPOSITION,
+                    String.format(DELETE_FAILED_ON_COMPOSITION, compositionAccess.getId()));
         }
     }
 
@@ -493,7 +512,7 @@ public class CompositionServiceImp extends BaseServiceImp implements Composition
                         StructuredStringFormat.JSON);
                 break;
             default:
-                throw new UnexpectedSwitchCaseException(format);
+                throw new UnexpectedSwitchCaseException(UnexpectedSwitchCaseException.class, UnexpectedSwitchCaseException.formatMessage(format));
         }
         return compositionString;
     }
@@ -538,7 +557,7 @@ public class CompositionServiceImp extends BaseServiceImp implements Composition
                         .unmarshal(content);
                 break;
             default:
-                throw new UnexpectedSwitchCaseException(format);
+                throw new UnexpectedSwitchCaseException(UnexpectedSwitchCaseException.class, UnexpectedSwitchCaseException.formatMessage(format));
         }
         return composition;
     }
@@ -548,7 +567,7 @@ public class CompositionServiceImp extends BaseServiceImp implements Composition
         try {
             return I_CompositionAccess.getLastVersionNumber(getDataAccess(), compositionId);
         } catch (Exception e) {
-            throw new InternalServerException(e);
+            throw new InternalServerException(CompositionServiceImp.class, EXCEPTION);
         }
     }
 
@@ -561,10 +580,10 @@ public class CompositionServiceImp extends BaseServiceImp implements Composition
         } catch (ObjectNotFoundException e) {
             throw e;
         } catch (Exception e) {
-            throw new InternalServerException(e);
+            throw new InternalServerException(CompositionServiceImp.class, EXCEPTION);
         }
         if (version <= 0) {
-            throw new InternalServerException("Invalid version number calculated.");
+            throw new InternalServerException(CompositionServiceImp.class, INVALID_VERSION_NUMBER_CALCULATED);
         } else {
             return version;
         }
@@ -622,7 +641,7 @@ public class CompositionServiceImp extends BaseServiceImp implements Composition
                         compos.get(1).getSysTransaction().toLocalDateTime(),
                         OffsetDateTime.now().getOffset())));
             } else {
-                throw new InternalServerException("Inconsistent composition data, no version 1 available");
+                throw new InternalServerException(CompositionServiceImp.class, INCONSISTENT_COMPOSITION_DATA_NO_VERSION_1_AVAILABLE);
             }
         }
 
@@ -642,7 +661,7 @@ public class CompositionServiceImp extends BaseServiceImp implements Composition
         }
 
         if (revisionHistory.getItems().isEmpty()) {
-            throw new InternalServerException("Problem creating RevisionHistory"); // never should be empty; not valid
+            throw new InternalServerException(CompositionServiceImp.class, PROBLEM_CREATING_REVISION_HISTORY); // never should be empty; not valid
         }
         return revisionHistory;
     }
@@ -674,8 +693,9 @@ public class CompositionServiceImp extends BaseServiceImp implements Composition
             UUID ehrUid, UUID versionedObjectUid, int version) {
         // check for valid version parameter
         if ((version == 0) || I_CompositionAccess.getLastVersionNumber(getDataAccess(), versionedObjectUid) < version) {
-            throw new ObjectNotFoundException(
-                    "versioned_composition", "No VERSIONED_COMPOSITION with given version: " + version);
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.VERSIONED_COMPOSITION.getType(),
+                    ContributionServiceImp.class, NO_VERSIONED_COMPOSITION_WITH_GIVEN_VERSION,
+                    NO_VERSIONED_COMPOSITION_WITH_GIVEN_VERSION.formatted(version));
         }
 
         // retrieve requested object

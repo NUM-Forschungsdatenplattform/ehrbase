@@ -31,6 +31,8 @@ import org.ehrbase.plugin.extensionpoints.CompositionExtensionPoint;
 import org.springframework.beans.factory.ListableBeanFactory;
 import org.springframework.core.annotation.AnnotationAwareOrderComparator;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.EXCEPTION;
+
 /**
  * @author Stefan Spiska
  */
@@ -73,7 +75,7 @@ public abstract class AbstractPluginAspect<EXTENSIONPOINT> {
             throw e;
         } catch (Throwable e) {
             // should never happen
-            throw new InternalServerException(e.getMessage(), e);
+            throw new InternalServerException(AbstractPluginAspect.class, EXCEPTION);
         }
     }
 

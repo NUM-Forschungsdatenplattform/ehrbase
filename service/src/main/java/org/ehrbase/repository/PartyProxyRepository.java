@@ -17,6 +17,7 @@
  */
 package org.ehrbase.repository;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.INCONSISTENT_PARTY_IDENTIFIED_UUID;
 import static org.ehrbase.jooq.pg.Tables.IDENTIFIER;
 import static org.ehrbase.jooq.pg.Tables.PARTY_IDENTIFIED;
 import static org.ehrbase.jooq.pg.Tables.USERS;
@@ -324,7 +325,8 @@ public class PartyProxyRepository {
             PartyIdentifiedRecord partyIdentifiedRecord =
                     context.fetchAny(PARTY_IDENTIFIED, PARTY_IDENTIFIED.ID.eq(uuid.get()));
             if (partyIdentifiedRecord == null) {
-                throw new InternalServerException("Inconsistent PartyIdentified UUID:" + uuid);
+                throw new InternalServerException(PartyProxyRepository.class,
+                        INCONSISTENT_PARTY_IDENTIFIED_UUID, String.format(INCONSISTENT_PARTY_IDENTIFIED_UUID, uuid));
             }
             if (!partyIdentifiedRecord.getName().equals(partyProxy.getName())) {
                 throw new IllegalArgumentException("Conflicting identification, existing name was:"

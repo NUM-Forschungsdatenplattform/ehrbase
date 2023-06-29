@@ -1,0 +1,30 @@
+package org.ehrbase.api.exception;
+
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
+@AllArgsConstructor
+@Getter
+public enum ObjectNotFoundExceptionType {
+
+
+    ADMIN_EHR("Admin EHR"),
+    EHR("EHR"),
+    AQL("AQL"),
+    COMPOSITION("COMPOSITION"),
+    EHR_STATUS("EHR_STATUS"),
+    CONTRIBUTION("CONTRIBUTION"),
+    COMPOSITION_LITERAL("COMPOSITION"),
+    TEMPLATE("TEMPLATE"),
+    ADMIN_DIRECTORY("Admin Directory"),
+    ADMIN_COMPOSITION("Admin Composition"),
+    DIRECTORY("DIRECTORY"), FOLDER("FOLDER"),
+    VERSIONED_EHR_STATUS("VERSIONED_EHR_STATUS"),
+    VERSIONED_COMPOSITION("VERSIONED_COMPOSITION"),
+    STORED_QUERY("STORED QUERY"),
+    ADMIN_CONTRIBUTION("Admin Contribution"),
+    ADMIN_TEMPLATE("ADMIN TEMPLATE"),
+    ADMIN_TEMPLATE_UPDATE("ADMIN TEMPLATE UPDATE"),
+    ADMIN_TEMPLATE_STORE_FILESYSTEM("ADMIN TEMPLATE STORE FILESYSTEM");
+    private final String type;
+}

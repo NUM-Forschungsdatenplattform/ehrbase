@@ -17,13 +17,27 @@
  */
 package org.ehrbase.api.exception;
 
+import lombok.Getter;
+
+@Getter
 public class InvalidApiParameterException extends RuntimeException {
 
-    public InvalidApiParameterException(String message) {
+    private final Class<?> entity;
+    private final String entityId;
+    private final String message;
+
+    public InvalidApiParameterException(Class<?> entity, String entityId, String message) {
         super(message);
+        this.entity = entity;
+        this.entityId = entityId;
+        this.message = message;
     }
 
-    public InvalidApiParameterException(String message, Throwable cause) {
-        super(message, cause);
+    public InvalidApiParameterException(Class<?> entity, String message) {
+        super(message);
+        this.entity = entity;
+        this.entityId = message;
+        this.message = message;
     }
+
 }

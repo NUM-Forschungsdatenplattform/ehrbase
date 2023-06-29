@@ -32,6 +32,7 @@ import org.ehrbase.api.authorization.EhrbasePermission;
 import org.ehrbase.api.exception.InternalServerException;
 import org.ehrbase.api.exception.InvalidApiParameterException;
 import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.api.exception.ObjectNotFoundExceptionType;
 import org.ehrbase.api.service.ContributionService;
 import org.ehrbase.api.service.EhrService;
 import org.ehrbase.response.ehrscape.ContributionDto;
@@ -51,6 +52,12 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import static org.ehrbase.api.exception.ExceptionsTemplate.COULD_NOT_RETRIEVE_EHR_STATUS_WITH_GIVEN_PARAMETERS;
+import static org.ehrbase.api.exception.ExceptionsTemplate.COULD_NT_FETCH_CONTRIBUTION_FOR_EXISTING_EHR_STATUS;
+import static org.ehrbase.api.exception.ExceptionsTemplate.EHR_WITH_ID_IS_NOT_FOUND;
+import static org.ehrbase.api.exception.ExceptionsTemplate.VERSION_CANNOT_BE_NEGATIVE;
+import static org.ehrbase.api.exception.ExceptionsTemplate.VERSION_UID_PARAMETER_HAS_WRONG_FORMAT;
 
 /**
  * Controller for /ehr/{ehrId}/versioned_ehr_status resource of openEHR REST API
@@ -82,7 +89,9 @@ public class OpenehrVersionedEhrStatusController extends BaseController implemen
 
         // check if EHR is valid
         if (!ehrService.hasEhr(ehrId)) {
-            throw new ObjectNotFoundException("ehr", "No EHR with this ID can be found");
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.EHR.getType(),
+                    OpenehrVersionedEhrStatusController.class, EHR_WITH_ID_IS_NOT_FOUND,
+                    String.format(EHR_WITH_ID_IS_NOT_FOUND,ehrId));
         }
 
         VersionedEhrStatus versionedEhrStatus = ehrService.getVersionedEhrStatus(ehrId);
@@ -106,7 +115,9 @@ public class OpenehrVersionedEhrStatusController extends BaseController implemen
 
         // check if EHR is valid
         if (!ehrService.hasEhr(ehrId)) {
-            throw new ObjectNotFoundException("ehr", "No EHR with this ID can be found");
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.EHR.getType(),
+                    OpenehrVersionedEhrStatusController.class, EHR_WITH_ID_IS_NOT_FOUND,
+                    String.format(EHR_WITH_ID_IS_NOT_FOUND,ehrId));
         }
 
         RevisionHistory revisionHistory = ehrService.getRevisionHistoryOfVersionedEhrStatus(ehrId);
@@ -136,7 +147,9 @@ public class OpenehrVersionedEhrStatusController extends BaseController implemen
 
         // check if EHR is valid
         if (!ehrService.hasEhr(ehrId)) {
-            throw new ObjectNotFoundException("ehr", "No EHR with this ID can be found");
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.EHR.getType(),
+                    OpenehrVersionedEhrStatusController.class, EHR_WITH_ID_IS_NOT_FOUND,
+                    String.format(EHR_WITH_ID_IS_NOT_FOUND,ehrId));
         }
 
         UUID versionedObjectId = ehrService.getEhrStatusVersionedObjectUidByEhr(ehrId);
@@ -153,11 +166,11 @@ public class OpenehrVersionedEhrStatusController extends BaseController implemen
         UUID contributionId = ehrStatusOriginalVersion
                 .map(i -> UUID.fromString(i.getContribution().getId().getValue()))
                 .orElseThrow(
-                        () -> new InvalidApiParameterException("Couldn't retrieve EhrStatus with given parameters"));
+                        () -> new InvalidApiParameterException(OpenehrVersionedEhrStatusController.class, COULD_NOT_RETRIEVE_EHR_STATUS_WITH_GIVEN_PARAMETERS));
 
         Optional<ContributionDto> optionalContributionDto = contributionService.getContribution(ehrId, contributionId);
         ContributionDto contributionDto = optionalContributionDto.orElseThrow(() ->
-                new InternalServerException("Couldn't fetch contribution for existing EhrStatus")); // shouldn't happen
+                new InternalServerException(OpenehrCompositionController.class, COULD_NT_FETCH_CONTRIBUTION_FOR_EXISTING_EHR_STATUS)); // shouldn't happen
 
         OriginalVersionResponseData<EhrStatus> originalVersionResponseData =
                 new OriginalVersionResponseData<>(ehrStatusOriginalVersion.get(), contributionDto);
@@ -183,7 +196,9 @@ public class OpenehrVersionedEhrStatusController extends BaseController implemen
 
         // check if EHR is valid
         if (!ehrService.hasEhr(ehrId)) {
-            throw new ObjectNotFoundException("ehr", "No EHR with this ID can be found.");
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.EHR.getType(),
+                    OpenehrVersionedEhrStatusController.class, EHR_WITH_ID_IS_NOT_FOUND,
+                    String.format(EHR_WITH_ID_IS_NOT_FOUND,ehrId));
         }
 
         // parse given version uid
@@ -193,21 +208,21 @@ public class OpenehrVersionedEhrStatusController extends BaseController implemen
             versionedObjectId = UUID.fromString(versionUid.split("::")[0]);
             version = Integer.parseInt(versionUid.split("::")[2]);
         } catch (Exception e) {
-            throw new InvalidApiParameterException("VERSION UID parameter has wrong format: " + e.getMessage());
+            throw new InvalidApiParameterException(OpenehrVersionedEhrStatusController.class, VERSION_UID_PARAMETER_HAS_WRONG_FORMAT);
         }
 
-        if (version < 1) throw new InvalidApiParameterException("Version can't be negative.");
+        if (version < 1) throw new InvalidApiParameterException(OpenehrVersionedEhrStatusController.class, VERSION_CANNOT_BE_NEGATIVE);
 
         Optional<OriginalVersion<EhrStatus>> ehrStatusOriginalVersion =
                 ehrService.getEhrStatusAtVersion(ehrId, versionedObjectId, version);
         UUID contributionId = ehrStatusOriginalVersion
                 .map(i -> UUID.fromString(i.getContribution().getId().getValue()))
                 .orElseThrow(
-                        () -> new InvalidApiParameterException("Couldn't retrieve EhrStatus with given parameters"));
+                        () -> new InvalidApiParameterException(OpenehrVersionedEhrStatusController.class, COULD_NOT_RETRIEVE_EHR_STATUS_WITH_GIVEN_PARAMETERS));
 
         Optional<ContributionDto> optionalContributionDto = contributionService.getContribution(ehrId, contributionId);
         ContributionDto contributionDto = optionalContributionDto.orElseThrow(() ->
-                new InternalServerException("Couldn't fetch contribution for existing EhrStatus")); // shouldn't happen
+                new InternalServerException(OpenehrCompositionController.class, COULD_NT_FETCH_CONTRIBUTION_FOR_EXISTING_EHR_STATUS)); // shouldn't happen
 
         OriginalVersionResponseData<EhrStatus> originalVersionResponseData =
                 new OriginalVersionResponseData<>(ehrStatusOriginalVersion.get(), contributionDto);

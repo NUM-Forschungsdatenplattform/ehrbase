@@ -34,6 +34,7 @@ import org.ehrbase.api.definitions.ServerConfig;
 import org.ehrbase.api.exception.InternalServerException;
 import org.ehrbase.api.exception.InvalidApiParameterException;
 import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.api.exception.ObjectNotFoundExceptionType;
 import org.ehrbase.api.service.CompositionService;
 import org.ehrbase.api.service.TemplateService;
 import org.ehrbase.api.service.TenantService;
@@ -55,6 +56,13 @@ import org.openehr.schemas.v1.OBJECTID;
 import org.openehr.schemas.v1.OPERATIONALTEMPLATE;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import static org.ehrbase.api.exception.ExceptionsTemplate.COULD_NOT_GENERATE_WEB_TEMPLATE;
+import static org.ehrbase.api.exception.ExceptionsTemplate.IO_EXCEPTION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.OPERATIONAL_TEMPLATE_WITH_ID_IS_NOT_FOUND;
+import static org.ehrbase.api.exception.ExceptionsTemplate.REQUEST_OPERATIONAL_TEMPLATE_TYPE_IS_NOT_SUPPORTED;
+import static org.ehrbase.api.exception.ExceptionsTemplate.TEMPLATE_WITH_ID_DOES_NOT_EXIST;
+import static org.ehrbase.api.exception.ExceptionsTemplate.TEMPLATE_WITH_THE_SPECIFIED_ID_DOES_NOT_EXIST;
 
 /**
  * @author Stefan Spiska
@@ -135,9 +143,10 @@ public class TemplateServiceImp extends BaseServiceImp implements TemplateServic
         try {
             return knowledgeCacheService.getQueryOptMetaData(templateId);
         } catch (NullPointerException e) {
-            throw new ObjectNotFoundException("template", "Template with the specified id does not exist", e);
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.TEMPLATE.getType(),
+                    TemplateServiceImp.class, TEMPLATE_WITH_THE_SPECIFIED_ID_DOES_NOT_EXIST);
         } catch (Exception e) {
-            throw new InternalServerException("Could not generate web template", e);
+            throw new InternalServerException(TemplateServiceImp.class, COULD_NOT_GENERATE_WEB_TEMPLATE);
         }
     }
 
@@ -145,7 +154,7 @@ public class TemplateServiceImp extends BaseServiceImp implements TemplateServic
     public String findOperationalTemplate(String templateId, OperationalTemplateFormat format)
             throws ObjectNotFoundException, InvalidApiParameterException, InternalServerException {
         if (format != OperationalTemplateFormat.XML) {
-            throw new InvalidApiParameterException("Requested operational template type not supported");
+            throw new InvalidApiParameterException(TemplateServiceImp.class, REQUEST_OPERATIONAL_TEMPLATE_TYPE_IS_NOT_SUPPORTED);
         }
 
         Optional<OPERATIONALTEMPLATE> existingTemplate =
@@ -158,7 +167,8 @@ public class TemplateServiceImp extends BaseServiceImp implements TemplateServic
                     return template.xmlText(opts);
                 })
                 .orElseThrow(
-                        () -> new ObjectNotFoundException("template", "Template with the specified id does not exist"));
+                        () -> new ObjectNotFoundException(ObjectNotFoundExceptionType.TEMPLATE.getType(),
+                                TemplateServiceImp.class, TEMPLATE_WITH_THE_SPECIFIED_ID_DOES_NOT_EXIST));
     }
 
     @Override
@@ -173,8 +183,9 @@ public class TemplateServiceImp extends BaseServiceImp implements TemplateServic
     public boolean adminDeleteTemplate(String templateId) {
         Optional<OPERATIONALTEMPLATE> existingTemplate = knowledgeCacheService.retrieveOperationalTemplate(templateId);
         if (existingTemplate.isEmpty()) {
-            throw new ObjectNotFoundException(
-                    "ADMIN TEMPLATE", String.format("Operational template with id %s not found.", templateId));
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.ADMIN_TEMPLATE.getType(),
+                    TemplateServiceImp.class, OPERATIONAL_TEMPLATE_WITH_ID_IS_NOT_FOUND,
+                    String.format(OPERATIONAL_TEMPLATE_WITH_ID_IS_NOT_FOUND, templateId));
         }
 
         // Delete template if not used
@@ -190,15 +201,16 @@ public class TemplateServiceImp extends BaseServiceImp implements TemplateServic
 
         // Check if template exists
         if (existingTemplate.isEmpty()) {
-            throw new ObjectNotFoundException(
-                    "ADMIN TEMPLATE UPDATE", String.format("Template with id %s does not exist", templateId));
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.ADMIN_TEMPLATE_UPDATE.getType(),
+                    TemplateServiceImp.class, TEMPLATE_WITH_ID_DOES_NOT_EXIST,
+                    String.format(TEMPLATE_WITH_ID_DOES_NOT_EXIST, templateId));
         }
 
         try (InputStream in = IOUtils.toInputStream(content, StandardCharsets.UTF_8)) {
             // Replace content
             return knowledgeCacheService.adminUpdateOperationalTemplate(in);
         } catch (IOException e) {
-            throw new InternalServerException(e.getMessage(), e);
+            throw new InternalServerException(TemplateServiceImp.class, IO_EXCEPTION);
         }
     }
 

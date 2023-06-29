@@ -29,6 +29,7 @@ import org.ehrbase.api.authorization.EhrbaseAuthorization;
 import org.ehrbase.api.authorization.EhrbasePermission;
 import org.ehrbase.api.exception.InvalidApiParameterException;
 import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.api.exception.ObjectNotFoundExceptionType;
 import org.ehrbase.api.service.QueryService;
 import org.ehrbase.response.ehrscape.QueryDefinitionResultDto;
 import org.ehrbase.response.ehrscape.QueryResultDto;
@@ -52,6 +53,9 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import static org.ehrbase.api.exception.ExceptionsTemplate.COULD_NOT_RETRIEVE_AQL;
+import static org.ehrbase.api.exception.ExceptionsTemplate.NO_AQL_QUERY_PROVIDED;
 
 /**
  * Controller for openEHR REST API QUERY resource.
@@ -134,7 +138,7 @@ public class OpenehrQueryController extends BaseController implements QueryApiSp
 
         String aql = (String) queryRequest.get("q");
         if (aql == null) {
-            throw new InvalidApiParameterException("No aql query provided");
+            throw new InvalidApiParameterException(OpenehrDirectoryController.class, NO_AQL_QUERY_PROVIDED);
         }
 
         aql = withOffsetLimit(aql, queryRequest);
@@ -224,8 +228,9 @@ public class OpenehrQueryController extends BaseController implements QueryApiSp
         String query = queryDefinitionResultDto.getQueryText();
 
         if (query == null) {
-            var message = MessageFormat.format("Could not retrieve AQL {0}/{1}", qualifiedQueryName, version);
-            throw new ObjectNotFoundException("AQL", message);
+            var message = MessageFormat.format(COULD_NOT_RETRIEVE_AQL, qualifiedQueryName, version);
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.AQL.getType(),
+                    OpenehrQueryController.class, COULD_NOT_RETRIEVE_AQL, message);
         }
 
         // Enriches request attributes with aql for later audit processing

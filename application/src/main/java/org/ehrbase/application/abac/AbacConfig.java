@@ -17,7 +17,8 @@
  */
 package org.ehrbase.application.abac;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import static org.ehrbase.api.exception.ExceptionsTemplate.CONNECTION_WITH_ABAC_SERVER_FAILED;
+
 import java.io.IOException;
 import java.net.URI;
 import java.util.Map;
@@ -32,6 +33,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @ConditionalOnProperty(name = "abac.enabled")
 @Configuration
@@ -152,8 +155,7 @@ public class AbacConfig {
             try {
                 return httpClient.execute(request);
             } catch (Exception e) {
-                throw new InternalServerException(
-                        "ABAC: Connection with ABAC server failed. Check configuration. Error: " + e.getMessage());
+                throw new InternalServerException(AbacConfig.class, CONNECTION_WITH_ABAC_SERVER_FAILED);
             }
         }
 

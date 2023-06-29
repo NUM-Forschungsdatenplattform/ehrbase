@@ -30,6 +30,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.PROVIDED_TENANT_ID_DOES_NOT_MATCH_SESSION;
+
 public final class TenantSupport {
 
     private TenantSupport() {
@@ -55,15 +57,13 @@ public final class TenantSupport {
                 });
     }
 
-    private static final String ERR_TENANT_ID_MISSMATCH = "Provided tenant id[%s] does not match session tenant id[%s]";
-
     public static Try<String, InternalServerException> isValidTenantId(
             String tenantId, Supplier<String> currentTenant) {
         String currentTenantIdentifier = currentTenant.get();
 
         return currentTenantIdentifier.equals(tenantId)
                 ? Try.success(tenantId)
-                : Try.failure(new InternalServerException(
-                        String.format(ERR_TENANT_ID_MISSMATCH, tenantId, currentTenantIdentifier)));
+                : Try.failure(new InternalServerException(TenantSupport.class, PROVIDED_TENANT_ID_DOES_NOT_MATCH_SESSION,
+                        String.format(PROVIDED_TENANT_ID_DOES_NOT_MATCH_SESSION, tenantId, currentTenantIdentifier)));
     }
 }

@@ -26,6 +26,8 @@ import org.ehrbase.api.exception.InternalServerException;
 import org.openehealth.ipf.commons.audit.codes.EventOutcomeIndicator;
 import org.springframework.http.HttpMethod;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.NON_UNIQUE_PATIENT_NUMBER_RESULT;
+
 /**
  * Base class for openEHR audit dataset
  */
@@ -109,7 +111,7 @@ public class OpenEhrAuditDataset implements Serializable {
         } else if (ids.size() == 1) {
             return ids.iterator().next();
         } else {
-            throw new InternalServerException("Non unique patient number result");
+            throw new InternalServerException(OpenEhrAuditDataset.class, NON_UNIQUE_PATIENT_NUMBER_RESULT);
         }
     }
 

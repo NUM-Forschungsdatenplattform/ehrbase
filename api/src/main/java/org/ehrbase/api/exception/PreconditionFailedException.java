@@ -17,42 +17,19 @@
  */
 package org.ehrbase.api.exception;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
 /**
  * Project-custom exception that allows outbound APIs to react on backend problems. Shall be thrown to invoke
  * status 412 "Precondition Failed" or whatever is appropriate.
  * To be thrown in all cases where part of the request leads to problems, like malformed queries or non-existent referenced objects.
  */
+@AllArgsConstructor
+@Getter
 public class PreconditionFailedException extends RuntimeException {
 
-    private final String currentVersionUid;
-    private final String url;
+    private final Class<?> entity;
+    private final String entityId;
 
-    public PreconditionFailedException(String message) {
-        super(message);
-
-        this.currentVersionUid = null;
-        this.url = null;
-    }
-
-    public PreconditionFailedException(String message, Throwable cause) {
-        super(message, cause);
-
-        this.currentVersionUid = null;
-        this.url = null;
-    }
-
-    public PreconditionFailedException(String message, String currentVersionUid, String url) {
-        super(message);
-
-        this.currentVersionUid = currentVersionUid;
-        this.url = url;
-    }
-
-    public String getCurrentVersionUid() {
-        return currentVersionUid;
-    }
-
-    public String getUrl() {
-        return url;
-    }
 }

@@ -17,6 +17,8 @@
  */
 package org.ehrbase.dao.access.jooq.party;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.INCONSISTENT_PARTY_TYPE_DETECTED;
+import static org.ehrbase.api.exception.ExceptionsTemplate.UNHANDLED_PARTY_TYPE_DETECTED;
 import static org.ehrbase.jooq.pg.Tables.PARTY_IDENTIFIED;
 
 import com.nedap.archie.rm.datavalues.DvIdentifier;
@@ -59,8 +61,8 @@ public class PersistedPartyProxy {
         } else if (PartyUtils.isPartyIdentified(partyProxy)) {
             return new PersistedPartyIdentified(domainAccess).store(partyProxy, tenantIdentifier);
         } else {
-            throw new InternalServerException(
-                    "Unhandled Party type detected:" + partyProxy.getClass().getSimpleName());
+            throw new InternalServerException(PersistedPartyProxy.class, UNHANDLED_PARTY_TYPE_DETECTED,
+                    String.format(UNHANDLED_PARTY_TYPE_DETECTED, partyProxy.getClass().getSimpleName()));
         }
     }
 
@@ -75,7 +77,8 @@ public class PersistedPartyProxy {
                     case party_related:
                         return;
                     default:
-                        throw new InternalServerException("Inconsistent Party type detected:" + p.getPartyRefType());
+                        throw new InternalServerException(PersistedPartyProxy.class, INCONSISTENT_PARTY_TYPE_DETECTED,
+                                String.format(INCONSISTENT_PARTY_TYPE_DETECTED, p.getPartyRefType()));
                 }
             });
 
@@ -118,8 +121,8 @@ public class PersistedPartyProxy {
         } else if (PartyUtils.isPartyIdentified(partyProxy)) {
             return new PersistedPartyIdentified(domainAccess).getOrCreate(partyProxy, tenantIdentifier);
         } else {
-            throw new InternalServerException(
-                    "Unhandled Party type detected:" + partyProxy.getClass().getSimpleName());
+            throw new InternalServerException(PersistedPartyProxy.class, UNHANDLED_PARTY_TYPE_DETECTED,
+                    String.format(UNHANDLED_PARTY_TYPE_DETECTED, partyProxy.getClass().getSimpleName()));
         }
     }
 

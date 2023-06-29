@@ -37,6 +37,8 @@ import org.jooq.DSLContext;
 import org.jooq.JSON;
 import org.jooq.Result;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.UPDATING_TENANT_ID_IS_NOT_ALLOWED;
+
 public class TenantAccess implements I_TenantAccess {
     private final TenantRecord record;
 
@@ -109,11 +111,10 @@ public class TenantAccess implements I_TenantAccess {
         };
     }
 
-    private static final String ERR_TENANT_ID = "Updateing tenant id[%s] is not allowed";
 
     public Tenant update(Tenant tenant) {
         if (!record.getTenantId().equals(tenant.getTenantId()))
-            new InternalServerException(String.format(ERR_TENANT_ID, tenant.getTenantId()));
+            new InternalServerException(TenantAccess.class, UPDATING_TENANT_ID_IS_NOT_ALLOWED, String.format(UPDATING_TENANT_ID_IS_NOT_ALLOWED, tenant.getTenantId()));
 
         record.setTenantName(tenant.getTenantName());
         String json = mapToJson.apply(tenant.getTenantProperties());

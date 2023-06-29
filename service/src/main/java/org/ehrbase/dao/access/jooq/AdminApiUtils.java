@@ -26,6 +26,9 @@ import org.ehrbase.jooq.pg.tables.records.*;
 import org.jooq.DSLContext;
 import org.jooq.Result;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.ADMIN_DELETION_OF_AUDIT_FAILED;
+import static org.ehrbase.api.exception.ExceptionsTemplate.ADMIN_DELETION_OF_COMPOSITION_AUXILIARY_OBJECTS_FAILED;
+
 /**
  * Util class to offer reusable methods in the scope of the Admin API.
  */
@@ -73,7 +76,7 @@ public class AdminApiUtils {
 
         // cleanup of composition auxiliary objects
         int res = ctx.selectQuery(new AdminDeleteCompositionHistory().call(id)).execute();
-        if (res != 1) throw new InternalServerException("Admin deletion of Composition auxiliary objects failed!");
+        if (res != 1) throw new InternalServerException(AdminApiUtils.class, ADMIN_DELETION_OF_COMPOSITION_AUXILIARY_OBJECTS_FAILED);
     }
 
     /**
@@ -85,7 +88,8 @@ public class AdminApiUtils {
     public void deleteAudit(UUID id, String context, Boolean resultCanBeEmpty) {
         Result<AdminDeleteAuditRecord> delAudit = Routines.adminDeleteAudit(ctx.configuration(), id);
         if (resultCanBeEmpty.equals(false) && delAudit.size() != 1)
-            throw new InternalServerException("Admin deletion of " + context + " Audit failed!");
+            throw new InternalServerException(AdminApiUtils.class, ADMIN_DELETION_OF_AUDIT_FAILED,
+                    String.format(ADMIN_DELETION_OF_AUDIT_FAILED, context));
     }
 
     /**

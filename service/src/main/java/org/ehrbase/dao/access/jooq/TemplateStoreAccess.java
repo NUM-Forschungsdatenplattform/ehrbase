@@ -17,6 +17,8 @@
  */
 package org.ehrbase.dao.access.jooq;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.CANNOT_DELETE_TEMPLATE_SINCE_THE_FOLLOWING_CONPOSITION_ARE_STILL_USING_IT;
+import static org.ehrbase.api.exception.ExceptionsTemplate.EXCEPTION;
 import static org.ehrbase.jooq.pg.tables.TemplateStore.TEMPLATE_STORE;
 
 import java.io.ByteArrayInputStream;
@@ -139,7 +141,7 @@ public class TemplateStoreAccess extends DataAccess implements I_TemplateStoreAc
         try {
             document = org.openehr.schemas.v1.TemplateDocument.Factory.parse(inputStream);
         } catch (XmlException | IOException e) {
-            throw new InternalServerException(e.getMessage());
+            throw new InternalServerException(TemplateStoreAccess.class, EXCEPTION);
         }
 
         return document.getTemplate();
@@ -198,8 +200,7 @@ public class TemplateStoreAccess extends DataAccess implements I_TemplateStoreAc
 
         if (usingCompositions.isNotEmpty()) {
             // There are compositions using this template -> Return list of uuids
-            throw new UnprocessableEntityException(String.format(
-                    "Cannot delete template %s since the following compositions are still using it %s",
+            throw new UnprocessableEntityException(TemplateStoreAccess.class, String.format(CANNOT_DELETE_TEMPLATE_SINCE_THE_FOLLOWING_CONPOSITION_ARE_STILL_USING_IT,
                     template.getTemplateId().getValue(), usingCompositions.toString()));
         } else {
             XmlOptions opts = new XmlOptions();
@@ -227,8 +228,7 @@ public class TemplateStoreAccess extends DataAccess implements I_TemplateStoreAc
                 Routines.adminGetTemplateUsage(domainAccess.getContext().configuration(), templateId);
         if (usingCompositions.isNotEmpty()) {
             // There are compositions using this template -> Return list of uuids
-            throw new UnprocessableEntityException(String.format(
-                    "Cannot delete template %s since the following compositions are still using it %s",
+            throw new UnprocessableEntityException(TemplateStoreAccess.class, String.format(CANNOT_DELETE_TEMPLATE_SINCE_THE_FOLLOWING_CONPOSITION_ARE_STILL_USING_IT,
                     templateId, usingCompositions.toString()));
         } else {
             // Template no longer used -> Delete
