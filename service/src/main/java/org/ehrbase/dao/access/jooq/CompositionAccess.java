@@ -17,6 +17,14 @@
  */
 package org.ehrbase.dao.access.jooq;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.COMPOSITION_NOT_FOUND_OR_IS_INVALID_DB_CONTEXT;
+import static org.ehrbase.api.exception.ExceptionsTemplate.DATABASE_INCONSISTENCY;
+import static org.ehrbase.api.exception.ExceptionsTemplate.DATABASE_INCONSISTENCY_COULD_NT_RETRIEVE_REFERENCED_AUDIT;
+import static org.ehrbase.api.exception.ExceptionsTemplate.NO_COMPOSITION_WITH_GIVEN_ID_FOUND;
+import static org.ehrbase.api.exception.ExceptionsTemplate.NO_VERSION_AVAILABLE_PRIOR_TO_DATE;
+import static org.ehrbase.api.exception.ExceptionsTemplate.PROBLEM_PROCESSING_COMPOSITION_ACCESS_IS_DELETED;
+import static org.ehrbase.api.exception.ExceptionsTemplate.PROBLEM_WITH_SQL_STATEMENT_OR_INPUT;
+import static org.ehrbase.api.exception.ExceptionsTemplate.VERSION_MAP_GENERATION_FAILED;
 import static org.ehrbase.jooq.pg.Tables.AUDIT_DETAILS;
 import static org.ehrbase.jooq.pg.Tables.COMPOSITION;
 import static org.ehrbase.jooq.pg.Tables.COMPOSITION_HISTORY;
@@ -47,6 +55,7 @@ import java.util.UUID;
 import org.ehrbase.api.definitions.ServerConfig;
 import org.ehrbase.api.exception.InternalServerException;
 import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.api.exception.ObjectNotFoundExceptionType;
 import org.ehrbase.dao.access.interfaces.I_AuditDetailsAccess;
 import org.ehrbase.dao.access.interfaces.I_CompositionAccess;
 import org.ehrbase.dao.access.interfaces.I_ConceptAccess;
@@ -476,7 +485,7 @@ public class CompositionAccess extends DataAccess implements I_CompositionAccess
                 new CompositionHistoryAccess(getDataAccess(), compositionRecord.getNamespace());
         newDeletedVersionAsHistoryAccess.setRecord(newRecord);
         if (newDeletedVersionAsHistoryAccess.commit() == null) // commit and throw error if nothing was inserted into DB
-        throw new InternalServerException("DB inconsistency");
+        throw new InternalServerException(CompositionAccess.class, DATABASE_INCONSISTENCY);
     }
 
     private static final String VERSION_QUERY =
@@ -530,7 +539,8 @@ public class CompositionAccess extends DataAccess implements I_CompositionAccess
                 }
             }
         } catch (SQLException e) {
-            throw new ObjectNotFoundException(COMPOSITION_LITERAL, "Composition not found or or invalid DB content", e);
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.COMPOSITION_LITERAL.getType(),
+                    CompositionAccess.class, COMPOSITION_NOT_FOUND_OR_IS_INVALID_DB_CONTEXT);
         }
 
         if (compositionHistoryAccess != null) {
@@ -635,7 +645,7 @@ public class CompositionAccess extends DataAccess implements I_CompositionAccess
                     .where(COMPOSITION.ID.eq(vCompositionUid))
                     .fetchOne();
         } catch (RuntimeException e) { // generalize SQL exceptions
-            throw new InternalServerException("Problem with SQL statement or input", e);
+            throw new InternalServerException(CompositionAccess.class, PROBLEM_WITH_SQL_STATEMENT_OR_INPUT);
         }
         Timestamp latestCompoTime = (Timestamp) result.get("mostRecentInTable");
 
@@ -653,7 +663,7 @@ public class CompositionAccess extends DataAccess implements I_CompositionAccess
                             .and(COMPOSITION_HISTORY.ID.eq(vCompositionUid)))
                     .fetchOne();
         } catch (RuntimeException e) { // generalize SQL exceptions
-            throw new InternalServerException("Problem with SQL statement or input", e);
+            throw new InternalServerException(CompositionAccess.class, PROBLEM_WITH_SQL_STATEMENT_OR_INPUT);
         }
         int versionComHist = (int) result2.get("countVersionInTable");
         if (timeCommitted.compareTo(latestCompoTime)
@@ -665,10 +675,9 @@ public class CompositionAccess extends DataAccess implements I_CompositionAccess
             versionComHist++;
         }
         if (versionComHist == 0) {
-            throw new ObjectNotFoundException(
-                    "composition",
-                    "There are no versions available prior to date " + timeCommitted
-                            + " for the the composition with id: " + vCompositionUid);
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.COMPOSITION.getType(),
+                    CompositionAccess.class, NO_VERSION_AVAILABLE_PRIOR_TO_DATE,
+                    String.format(NO_VERSION_AVAILABLE_PRIOR_TO_DATE, timeCommitted, vCompositionUid));
         }
         return versionComHist;
     }
@@ -772,7 +781,7 @@ public class CompositionAccess extends DataAccess implements I_CompositionAccess
         }
 
         if (versionCounter != 0) {
-            throw new InternalServerException("Version Map generation failed");
+            throw new InternalServerException(CompositionAccess.class, VERSION_MAP_GENERATION_FAILED);
         }
 
         return versionMap;
@@ -1077,7 +1086,8 @@ public class CompositionAccess extends DataAccess implements I_CompositionAccess
                         .fetchExists(COMPOSITION_HISTORY, COMPOSITION_HISTORY.ID.eq(versionedObjectId))) {
             return true;
         } else {
-            throw new ObjectNotFoundException(COMPOSITION_LITERAL, "No composition with given ID found");
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.COMPOSITION_LITERAL.getType(),
+                    CompositionAccess.class, NO_COMPOSITION_WITH_GIVEN_ID_FOUND);
         }
     }
 
@@ -1111,16 +1121,17 @@ public class CompositionAccess extends DataAccess implements I_CompositionAccess
                             AUDIT_DETAILS,
                             AUDIT_DETAILS.ID.eq(historyRecordsRes.get(0).getHasAudit()));
             if (audit == null) {
-                throw new InternalServerException("DB inconsistency: couldn't retrieve referenced audit");
+                throw new InternalServerException(CompositionAccess.class, DATABASE_INCONSISTENCY_COULD_NT_RETRIEVE_REFERENCED_AUDIT);
             }
             // and check for correct change type -> is deleted
             if (audit.getChangeType().equals(ContributionChangeType.deleted)) {
                 return true;
             }
         } else {
-            throw new ObjectNotFoundException(COMPOSITION_LITERAL, "No composition with given ID found");
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.COMPOSITION_LITERAL.getType(),
+                    CompositionAccess.class, NO_COMPOSITION_WITH_GIVEN_ID_FOUND);
         }
-        throw new InternalServerException("Problem processing CompositionAccess.isDeleted(..)");
+        throw new InternalServerException(CompositionAccess.class, PROBLEM_PROCESSING_COMPOSITION_ACCESS_IS_DELETED);
     }
 
     @Override

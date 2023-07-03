@@ -38,6 +38,8 @@ import org.springframework.lang.NonNull;
 import org.springframework.web.servlet.DispatcherServlet;
 import org.springframework.web.servlet.HandlerInterceptor;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.NON_UNIQUE_EHR_ID_RESULT;
+
 /**
  * Base {@link HandlerInterceptor} that provides the common logic for handling audit feature.
  */
@@ -60,8 +62,7 @@ public abstract class OpenEhrAuditInterceptor<T extends OpenEhrAuditDataset> imp
 
     @Override
     public boolean preHandle(
-            @NonNull HttpServletRequest request, @NonNull HttpServletResponse response, @NonNull Object handler)
-            throws Exception {
+            @NonNull HttpServletRequest request, @NonNull HttpServletResponse response, @NonNull Object handler) {
         request.setAttribute(START_TIME_ATTRIBUTE, Instant.now());
         return true;
     }
@@ -129,7 +130,7 @@ public abstract class OpenEhrAuditInterceptor<T extends OpenEhrAuditDataset> imp
         } else if (ehrIds.size() == 1) {
             return ehrIds.iterator().next();
         } else {
-            throw new InternalServerException("Non unique EhrId result");
+            throw new InternalServerException(OpenEhrAuditDataset.class, NON_UNIQUE_EHR_ID_RESULT);
         }
     }
 

@@ -17,6 +17,13 @@
  */
 package org.ehrbase.dao.access.jooq;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.ADMIN_DELETION_OF_STATUS_FAILED;
+import static org.ehrbase.api.exception.ExceptionsTemplate.ADMIN_DELETION_OF_STATUS_FAILED_UNEXPECTED_RESULT;
+import static org.ehrbase.api.exception.ExceptionsTemplate.COULD_NOT_STORE_CONTRIBUTION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.COULD_NOT_UPDATE_AUDIT_DETAILS;
+import static org.ehrbase.api.exception.ExceptionsTemplate.FETCHING_CONTRIBUTION_FAILED;
+import static org.ehrbase.api.exception.ExceptionsTemplate.MISSING_MANDATORY_COMMITTER_ID;
+import static org.ehrbase.api.exception.ExceptionsTemplate.MISSING_MANDATORY_SYSTEM_ID;
 import static org.ehrbase.jooq.pg.Tables.CONTRIBUTION;
 
 import com.nedap.archie.rm.generic.AuditDetails;
@@ -124,7 +131,7 @@ public class ContributionAccess extends DataAccess implements I_ContributionAcce
                                     .retrieveInstance(domainAccess.getDataAccess(), rec.getHasAudit())))
                     .orElse(null);
         } catch (Exception e) {
-            throw new InternalServerException("fetching contribution failed", e);
+            throw new InternalServerException(ContextAccess.class, FETCHING_CONTRIBUTION_FAILED);
         }
     }
 
@@ -140,7 +147,7 @@ public class ContributionAccess extends DataAccess implements I_ContributionAcce
         }
 
         contributionRecord.setEhrId(this.getEhrId());
-        if (contributionRecord.insert() == 0) throw new InternalServerException("Couldn't store contribution");
+        if (contributionRecord.insert() == 0) throw new InternalServerException(ContributionAccess.class, COULD_NOT_STORE_CONTRIBUTION);
 
         return contributionRecord.getId();
     }
@@ -198,13 +205,13 @@ public class ContributionAccess extends DataAccess implements I_ContributionAcce
         if (committerId != null) {
             auditDetails.setCommitter(committerId);
         } else {
-            throw new InternalServerException("Missing mandatory committer ID");
+            throw new InternalServerException(ContributionAccess.class, MISSING_MANDATORY_COMMITTER_ID);
         }
 
         if (systemId != null) {
             auditDetails.setSystemId(systemId);
         } else {
-            throw new InternalServerException("Missing mandatory system ID");
+            throw new InternalServerException(ContributionAccess.class, MISSING_MANDATORY_SYSTEM_ID);
         }
 
         if (contributionChangeType != null)
@@ -308,7 +315,7 @@ public class ContributionAccess extends DataAccess implements I_ContributionAcce
             this.auditDetails.setChangeType(I_ConceptAccess.fetchContributionChangeType(
                     this, I_ConceptAccess.ContributionChangeType.MODIFICATION));
             if (this.auditDetails.update(transactionTime, force).equals(Boolean.FALSE))
-                throw new InternalServerException("Couldn't update auditDetails");
+                throw new InternalServerException(ContributionAccess.class, COULD_NOT_UPDATE_AUDIT_DETAILS);
             contributionRecord.setHasAudit(this.auditDetails.getId()); // new audit ID
 
             // execute update of contribution itself
@@ -523,7 +530,7 @@ public class ContributionAccess extends DataAccess implements I_ContributionAcce
             Result<AdminDeleteStatusRecord> delStatus =
                     Routines.adminDeleteStatus(getContext().configuration(), status.getStatus());
             if (delStatus.isEmpty()) {
-                throw new InternalServerException("Admin deletion of Status failed! Unexpected result.");
+                throw new InternalServerException(ContributionAccess.class, ADMIN_DELETION_OF_STATUS_FAILED_UNEXPECTED_RESULT);
             }
             // handle auxiliary objects
             delStatus.forEach(id -> {
@@ -534,7 +541,7 @@ public class ContributionAccess extends DataAccess implements I_ContributionAcce
                 int res = getContext()
                         .selectQuery(new AdminDeleteStatusHistory().call(status.getStatus()))
                         .execute();
-                if (res != 1) throw new InternalServerException("Admin deletion of Status failed!");
+                if (res != 1) throw new InternalServerException(ContributionAccess.class, ADMIN_DELETION_OF_STATUS_FAILED);
             });
         });
 

@@ -32,6 +32,7 @@ import org.ehrbase.api.authorization.EhrbasePermission;
 import org.ehrbase.api.exception.InternalServerException;
 import org.ehrbase.api.exception.InvalidApiParameterException;
 import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.api.exception.ObjectNotFoundExceptionType;
 import org.ehrbase.api.service.CompositionService;
 import org.ehrbase.api.service.ContributionService;
 import org.ehrbase.api.service.EhrService;
@@ -53,6 +54,13 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import static org.ehrbase.api.exception.ExceptionsTemplate.COMPOSITION_EXISTS_BUT_CAN_T_BE_RETRIEVED_AS_ORIGINAL_VERSION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.COULD_NOT_RETRIEVE_COMPOSITION_WITH_GIVEN_PARAMETERS;
+import static org.ehrbase.api.exception.ExceptionsTemplate.COULD_NT_FETCH_CONTRIBUTION_FOR_EXISTING_COMPOSITION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.NO_COMPOSITION_WITH_THIS_ID_CAN_BE_FOUND;
+import static org.ehrbase.api.exception.ExceptionsTemplate.NO_EHR_WITH_THIS_ID_CAN_BE_FOUND;
+import static org.ehrbase.api.exception.ExceptionsTemplate.VERSION_UID_PARAMETER_HAS_WRONG_FORMAT;
 
 /**
  * Controller for /ehr/{ehrId}/versioned_composition resource of openEHR REST API
@@ -157,7 +165,7 @@ public class OpenehrVersionedCompositionController extends BaseController
             versionedObjectId = UUID.fromString(compositionVersionId.getRoot().getValue());
             version = Integer.parseInt(compositionVersionId.getVersionTreeId().getValue());
         } catch (Exception e) {
-            throw new InvalidApiParameterException("VERSION UID parameter has wrong format: " + e.getMessage());
+            throw new InvalidApiParameterException(OpenehrVersionedCompositionController.class, VERSION_UID_PARAMETER_HAS_WRONG_FORMAT);
         }
 
         // -----------------
@@ -198,12 +206,15 @@ public class OpenehrVersionedCompositionController extends BaseController
     private void checkForValidEhrAndCompositionParameter(UUID ehrId, UUID versionedCompoUid) {
         // check if EHR is valid
         if (!ehrService.hasEhr(ehrId)) {
-            throw new ObjectNotFoundException("ehr", "No EHR with this ID can be found");
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.EHR.getType(),
+                    OpenehrVersionedCompositionController.class, NO_EHR_WITH_THIS_ID_CAN_BE_FOUND);
         }
 
         // check if Composition is valid
         if (!compositionService.exists(versionedCompoUid)) {
-            throw new ObjectNotFoundException("composition", "No composition with this ID can be found.");
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.COMPOSITION.getType(),
+                    OpenehrVersionedCompositionController.class, NO_COMPOSITION_WITH_THIS_ID_CAN_BE_FOUND,
+                    String.format(NO_COMPOSITION_WITH_THIS_ID_CAN_BE_FOUND, versionedCompoUid));
         }
     }
 
@@ -215,15 +226,15 @@ public class OpenehrVersionedCompositionController extends BaseController
         UUID contributionId = compositionOriginalVersion
                 .map(i -> UUID.fromString(i.getContribution().getId().getValue()))
                 .orElseThrow(
-                        () -> new InvalidApiParameterException("Couldn't retrieve Composition with given parameters"));
+                        () -> new InvalidApiParameterException(OpenehrVersionedCompositionController.class, COULD_NOT_RETRIEVE_COMPOSITION_WITH_GIVEN_PARAMETERS));
 
         Optional<ContributionDto> optionalContributionDto = contributionService.getContribution(ehrId, contributionId);
         ContributionDto contributionDto = optionalContributionDto.orElseThrow(() -> new InternalServerException(
-                "Couldn't fetch contribution for existing Composition")); // shouldn't happen
+                OpenehrCompositionController.class, COULD_NT_FETCH_CONTRIBUTION_FOR_EXISTING_COMPOSITION)); // shouldn't happen
 
         OriginalVersionResponseData<Composition> originalVersionResponseData = new OriginalVersionResponseData<>(
                 compositionOriginalVersion.orElseThrow(() ->
-                        new InternalServerException("Composition exists but can't be retrieved as Original Version.")),
+                        new InternalServerException(OpenehrCompositionController.class, COMPOSITION_EXISTS_BUT_CAN_T_BE_RETRIEVED_AS_ORIGINAL_VERSION)),
                 contributionDto);
 
         HttpHeaders respHeaders = new HttpHeaders();

@@ -32,6 +32,7 @@ import org.ehrbase.api.definitions.ServerConfig;
 import org.ehrbase.api.exception.UnprocessableEntityException;
 import org.ehrbase.api.exception.ValidationException;
 import org.ehrbase.api.service.ValidationService;
+import org.ehrbase.response.openehr.ErrorBodyPayload;
 import org.ehrbase.terminology.openehr.TerminologyService;
 import org.ehrbase.validation.CompositionValidator;
 import org.ehrbase.validation.ConstraintViolationException;
@@ -43,6 +44,12 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+
+import static org.ehrbase.api.exception.ExceptionsTemplate.EXTERNAL_REF_ID_IS_REQUIRED;
+import static org.ehrbase.api.exception.ExceptionsTemplate.EXTERNAL_REF_NAMESPACE_IS_REQUIRED;
+import static org.ehrbase.api.exception.ExceptionsTemplate.FAILED_TO_INJECT_SHARED_RMPATHQUERY_CACHE;
+import static org.ehrbase.api.exception.ExceptionsTemplate.SUBJECTS_NAMESPACE_FORMAT_INVALID;
+import static org.ehrbase.api.exception.ExceptionsTemplate.SUBJECT_IS_REQUIRED;
 
 /**
  * {@link ValidationService} implementation.
@@ -119,7 +126,7 @@ public class ValidationServiceImp implements ValidationService {
             queryCacheField.setAccessible(true);
             queryCacheField.set(validator.getRmObjectValidator(), delegator);
         } catch (IllegalAccessException | NoSuchFieldException e) {
-            throw new RuntimeException("Failed to inject shared RMPathQuery cache", e);
+            throw new RuntimeException(FAILED_TO_INJECT_SHARED_RMPATHQUERY_CACHE, e);
         }
     }
 
@@ -129,7 +136,7 @@ public class ValidationServiceImp implements ValidationService {
         try {
             webTemplate = knowledgeCacheService.getQueryOptMetaData(templateID);
         } catch (IllegalArgumentException e) {
-            throw new UnprocessableEntityException(e.getMessage());
+            throw new UnprocessableEntityException(ValidationServiceImp.class, e.getMessage());
         }
 
         // Validate the composition based on WebTemplate
@@ -191,13 +198,13 @@ public class ValidationServiceImp implements ValidationService {
                 stringBuilder.append(rmObjectValidationMessage.toString());
                 stringBuilder.append("\n");
             }
-            throw new ValidationException(stringBuilder.toString());
+            throw new ValidationException(ErrorBodyPayload.class, stringBuilder.toString());
         }
 
         // second, additional specific checks and other mandatory attributes
 
         if (ehrStatus.getSubject() == null) {
-            throw new ValidationException("subject is required");
+            throw new ValidationException(ValidationServiceImp.class, SUBJECT_IS_REQUIRED);
         }
 
         if (ehrStatus.getSubject().getExternalRef()
@@ -210,16 +217,16 @@ public class ValidationServiceImp implements ValidationService {
                             .getId()
                             .getValue()
                             .isEmpty()) {
-                throw new ValidationException("ExternalRef ID is required");
+                throw new ValidationException(ValidationServiceImp.class, EXTERNAL_REF_ID_IS_REQUIRED);
             }
             // and a namespace
             if (ehrStatus.getSubject().getExternalRef().getNamespace() == null) {
-                throw new ValidationException("ExternalRef namespace is required");
+                throw new ValidationException(ValidationServiceImp.class, EXTERNAL_REF_NAMESPACE_IS_REQUIRED);
                 // which needs to be valid
             } else if (!NAMESPACE_PATTERN
                     .matcher(ehrStatus.getSubject().getExternalRef().getNamespace())
                     .matches()) {
-                throw new ValidationException("Subject's namespace format invalid");
+                throw new ValidationException(ValidationServiceImp.class, SUBJECTS_NAMESPACE_FORMAT_INVALID);
             }
         }
     }

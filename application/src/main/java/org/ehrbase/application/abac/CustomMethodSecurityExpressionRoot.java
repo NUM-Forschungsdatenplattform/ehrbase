@@ -18,6 +18,21 @@
 package org.ehrbase.application.abac;
 
 import static org.apache.commons.lang3.StringUtils.isBlank;
+import static org.ehrbase.api.exception.ExceptionsTemplate.AQL_AUDIT_PATIENT_DATA_MALFORMED;
+import static org.ehrbase.api.exception.ExceptionsTemplate.AQL_AUDIT_PATIENT_DATA_UNAVAILABLE;
+import static org.ehrbase.api.exception.ExceptionsTemplate.AQL_AUDIT_TEMPLATE_DATA_MALFORMED;
+import static org.ehrbase.api.exception.ExceptionsTemplate.AQL_AUDIT_TEMPLATE_DATA_UNAVAILABLE;
+import static org.ehrbase.api.exception.ExceptionsTemplate.INVALID_AUTH_TYPE_GIVEN;
+import static org.ehrbase.api.exception.ExceptionsTemplate.INVALID_PATIENT_ATTRIBUTE_CONTENT;
+import static org.ehrbase.api.exception.ExceptionsTemplate.INVALID_POST_CONTRIBUTION_PAYLOAD;
+import static org.ehrbase.api.exception.ExceptionsTemplate.INVALID_TEMPLATE_ATTRIBUTE_CONTENT;
+import static org.ehrbase.api.exception.ExceptionsTemplate.INVALID_TYPE_GIVE_FROM_PRE_OR_POST_AUTHORIZE;
+import static org.ehrbase.api.exception.ExceptionsTemplate.PARAMETERS_WERE_CONFIGURED_BUT_REQUEST_PARAMETERS_ARE_EMPTY;
+import static org.ehrbase.api.exception.ExceptionsTemplate.UNEXPECTED_COMPOSITION_PAYLOAD_OBJECT;
+import static org.ehrbase.api.exception.ExceptionsTemplate.UNEXPECTED_EMPTY_RESPONSE_BODY;
+import static org.ehrbase.api.exception.ExceptionsTemplate.UNEXPECTED_EMPTY_RESPONSE_FROM_COMPOSITION_DELETE;
+import static org.ehrbase.api.exception.ExceptionsTemplate.UNEXPECTED_EMPTY_RESPONSE_FROM_COMPOSITION_REQUEST;
+import static org.ehrbase.api.exception.ExceptionsTemplate.UNEXPECTED_PAYLOAD_TYPE;
 import static org.ehrbase.rest.util.AuthHelper.getRequestedJwtClaim;
 import static org.springframework.http.HttpStatus.NO_CONTENT;
 
@@ -184,7 +199,7 @@ public class CustomMethodSecurityExpressionRoot extends SecurityExpressionRoot
                 requestUrl = requestUrl.concat(policy.get(AbacType.QUERY).getName());
                 break;
             default:
-                throw new InternalServerException("ABAC: Invalid type given from Pre- or PostAuthorize");
+                throw new InternalServerException(AbacConfig.class, INVALID_TYPE_GIVE_FROM_PRE_OR_POST_AUTHORIZE);
         }
 
         // Check and extract JWT
@@ -219,8 +234,7 @@ public class CustomMethodSecurityExpressionRoot extends SecurityExpressionRoot
                         || policyParameters.contains(PolicyParameter.PATIENT)
                         || policyParameters.contains(PolicyParameter.TEMPLATE))
                 && requestMap.size() == 0) {
-            throw new InternalServerException(
-                    "ABAC: Parameters were configured, but request parameters " + "are empty.");
+            throw new InternalServerException( CustomMethodSecurityExpressionRoot.class, PARAMETERS_WERE_CONFIGURED_BUT_REQUEST_PARAMETERS_ARE_EMPTY);
         }
 
         return abacCheckRequest(requestUrl, requestMap);
@@ -281,7 +295,7 @@ public class CustomMethodSecurityExpressionRoot extends SecurityExpressionRoot
             return true;
         } else if (!isQuery) return false;
         else if (!(payload instanceof Map))
-            throw new InternalServerException("ABAC: AQL audit patient data malformed.");
+            throw new InternalServerException(CustomMethodSecurityExpressionRoot.class, AQL_AUDIT_PATIENT_DATA_MALFORMED);
         else {
             if (((Map<?, ?>) payload).containsKey(AuditVariables.EHR_PATH)) {
                 Set<UUID> ehrs = (Set<UUID>) ((Map<?, ?>) payload).get(AuditVariables.EHR_PATH);
@@ -296,7 +310,7 @@ public class CustomMethodSecurityExpressionRoot extends SecurityExpressionRoot
                 patientSet.add(tokenPatient);
                 requestMap.put(PATIENT, patientSet);
                 return true;
-            } else throw new InternalServerException("ABAC: AQL audit patient data unavailable.");
+            } else throw new InternalServerException(CustomMethodSecurityExpressionRoot.class, AQL_AUDIT_PATIENT_DATA_UNAVAILABLE);
         }
     }
 
@@ -327,13 +341,13 @@ public class CustomMethodSecurityExpressionRoot extends SecurityExpressionRoot
                 if (authType.equals(POST)) {
                     // @PostAuthorize gives a ResponseEntity type for "returnObject", so payload is of that type
                     if (!(payload instanceof ResponseEntity<?> responseEntity)) {
-                        throw new InternalServerException("ABAC: unexpected payload type");
+                        throw new InternalServerException(CustomMethodSecurityExpressionRoot.class, UNEXPECTED_PAYLOAD_TYPE);
                     }
                     if (!responseEntity.hasBody()) {
                         if (NO_CONTENT.equals(responseEntity.getStatusCode())) {
                             return;
                         }
-                        throw new InternalServerException("ABAC: unexpected empty response body");
+                        throw new InternalServerException(CustomMethodSecurityExpressionRoot.class, UNEXPECTED_EMPTY_RESPONSE_BODY);
                     }
                     Object body = responseEntity.getBody();
                     if (NO_CONTENT.equals(responseEntity.getStatusCode())) {
@@ -344,7 +358,7 @@ public class CustomMethodSecurityExpressionRoot extends SecurityExpressionRoot
                                 break;
                             }
                         }
-                        throw new InternalServerException("ABAC: Unexpected empty response from composition request");
+                        throw new InternalServerException(CustomMethodSecurityExpressionRoot.class, UNEXPECTED_EMPTY_RESPONSE_FROM_COMPOSITION_REQUEST);
                     }
                     if (body instanceof OriginalVersionResponseData) {
                         // case of versioned_composition --> fast path, because template is easy to get
@@ -359,7 +373,7 @@ public class CustomMethodSecurityExpressionRoot extends SecurityExpressionRoot
                     } else if (body instanceof String) {
                         content = (String) body;
                     } else {
-                        throw new InternalServerException("ABAC: unexpected composition payload object");
+                        throw new InternalServerException(CustomMethodSecurityExpressionRoot.class, UNEXPECTED_COMPOSITION_PAYLOAD_OBJECT);
                     }
                 } else if (authType.equals(PRE)) {
                     try {
@@ -379,15 +393,15 @@ public class CustomMethodSecurityExpressionRoot extends SecurityExpressionRoot
                             }
                             break; // special case, so done here, exit
                         } else {
-                            throw new InternalServerException(
-                                    "ABAC: unexpected empty response from composition delete");
+                            throw new InternalServerException(CustomMethodSecurityExpressionRoot.class,
+                                    UNEXPECTED_EMPTY_RESPONSE_FROM_COMPOSITION_DELETE);
                         }
                     } catch (IllegalArgumentException e) {
                         // if not an UUID, the payload is a composition itself so continue
                         content = (String) payload;
                     }
                 } else {
-                    throw new InternalServerException("ABAC: invalid auth type given.");
+                    throw new InternalServerException(CustomMethodSecurityExpressionRoot.class,INVALID_AUTH_TYPE_GIVEN);
                 }
                 String templateId;
                 if (MediaType.parseMediaType(contentType).isCompatibleWith(MediaType.APPLICATION_JSON)) {
@@ -413,7 +427,7 @@ public class CustomMethodSecurityExpressionRoot extends SecurityExpressionRoot
                     requestMap.put(TEMPLATE, templates);
                     break;
                 } else {
-                    throw new InternalServerException("ABAC: invalid POST contribution payload.");
+                    throw new InternalServerException(CustomMethodSecurityExpressionRoot.class, INVALID_POST_CONTRIBUTION_PAYLOAD);
                 }
             case BaseController.QUERY:
                 // special case of type QUERY, where multiple subjects are possible
@@ -425,13 +439,13 @@ public class CustomMethodSecurityExpressionRoot extends SecurityExpressionRoot
                         requestMap.put(TEMPLATE, templateSet);
                         break;
                     } else {
-                        throw new InternalServerException("ABAC: AQL audit template data unavailable.");
+                        throw new InternalServerException(CustomMethodSecurityExpressionRoot.class, AQL_AUDIT_TEMPLATE_DATA_UNAVAILABLE);
                     }
                 } else {
-                    throw new InternalServerException("ABAC: AQL audit template data malformed.");
+                    throw new InternalServerException(CustomMethodSecurityExpressionRoot.class, AQL_AUDIT_TEMPLATE_DATA_MALFORMED);
                 }
             default:
-                throw new InternalServerException("ABAC: Invalid type given from Pre- or PostAuthorize");
+                throw new InternalServerException(CustomMethodSecurityExpressionRoot.class, INVALID_TYPE_GIVE_FROM_PRE_OR_POST_AUTHORIZE);
         }
     }
 
@@ -469,7 +483,7 @@ public class CustomMethodSecurityExpressionRoot extends SecurityExpressionRoot
                 request.put(PATIENT, (String) bodyMap.get(PATIENT));
             } else {
                 // if it is just a String, set it and continue normal
-                throw new InternalServerException("ABAC: Invalid patient attribute content.");
+                throw new InternalServerException(CustomMethodSecurityExpressionRoot.class, INVALID_PATIENT_ATTRIBUTE_CONTENT);
             }
         }
         // check if template attributes are available and see if it contains a Set or simple String
@@ -481,7 +495,7 @@ public class CustomMethodSecurityExpressionRoot extends SecurityExpressionRoot
                 // if it is just a String, set it and continue normal
                 request.put(TEMPLATE, (String) bodyMap.get(TEMPLATE));
             } else {
-                throw new InternalServerException("ABAC: Invalid template attribute content.");
+                throw new InternalServerException(CustomMethodSecurityExpressionRoot.class, INVALID_TEMPLATE_ATTRIBUTE_CONTENT);
             }
         }
         return abacCheck.execute(url, request);

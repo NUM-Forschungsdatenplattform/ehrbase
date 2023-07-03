@@ -32,6 +32,7 @@ import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.ehrbase.api.definitions.ServerConfig;
 import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.api.exception.ObjectNotFoundExceptionType;
 import org.ehrbase.api.exception.PreconditionFailedException;
 import org.ehrbase.api.exception.StateConflictException;
 import org.ehrbase.api.service.EhrService;
@@ -44,6 +45,10 @@ import org.jooq.DSLContext;
 import org.jooq.Result;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
+
+import static org.ehrbase.api.exception.ExceptionsTemplate.EHR_WITH_ID_ALREADY_CONTAIN_A_DIRECTORY;
+import static org.ehrbase.api.exception.ExceptionsTemplate.EHR_WITH_ID_DOES_NOT_EXIST;
+import static org.ehrbase.api.exception.ExceptionsTemplate.EHR_WITH_ID_DOES_NOT_CONTAIN_A_DIRECTORY;
 
 /**
  * @author Stefan Spiska
@@ -145,7 +150,7 @@ public class DirectoryServiceImp extends BaseServiceImp implements InternalDirec
         // validation
         ehrService.checkEhrExistsAndIsModifiable(ehrId);
         if (ehrFolderRepository.hasDirectory(ehrId)) {
-            throw new StateConflictException("EHR with id %s already contains a directory.".formatted(ehrId));
+            throw new StateConflictException(DirectoryServiceImp.class, EHR_WITH_ID_ALREADY_CONTAIN_A_DIRECTORY.formatted(ehrId));
         }
 
         FolderUtils.checkSiblingNameConflicts(folder);
@@ -176,8 +181,8 @@ public class DirectoryServiceImp extends BaseServiceImp implements InternalDirec
         // validation
         ehrService.checkEhrExistsAndIsModifiable(ehrId);
         if (!ehrFolderRepository.hasDirectory(ehrId)) {
-            throw new PreconditionFailedException(
-                    String.format("EHR with id %s does not contain a directory.", ehrId.toString()));
+            throw new PreconditionFailedException(DirectoryServiceImp.class,
+                    String.format(EHR_WITH_ID_DOES_NOT_CONTAIN_A_DIRECTORY, ehrId.toString()));
         }
 
         FolderUtils.checkSiblingNameConflicts(folder);
@@ -201,7 +206,7 @@ public class DirectoryServiceImp extends BaseServiceImp implements InternalDirec
         // validation
         ehrService.checkEhrExistsAndIsModifiable(ehrId);
         if (!ehrFolderRepository.hasDirectory(ehrId)) {
-            throw new PreconditionFailedException("EHR with id %s does not contain a directory.".formatted(ehrId));
+            throw new PreconditionFailedException(DirectoryServiceImp.class, EHR_WITH_ID_DOES_NOT_CONTAIN_A_DIRECTORY.formatted(ehrId));
         }
 
         ehrFolderRepository.delete(
@@ -236,7 +241,9 @@ public class DirectoryServiceImp extends BaseServiceImp implements InternalDirec
 
         // Check if EHR exists
         if (!this.ehrService.hasEhr(ehrId)) {
-            throw new ObjectNotFoundException("Admin Directory", "EHR with id %s does not exist".formatted(ehrId));
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.ADMIN_DIRECTORY.getType(),
+                    DirectoryServiceImp.class, EHR_WITH_ID_DOES_NOT_EXIST,
+                    EHR_WITH_ID_DOES_NOT_EXIST.formatted(ehrId));
         }
 
         // For now only EHR.directory is supported

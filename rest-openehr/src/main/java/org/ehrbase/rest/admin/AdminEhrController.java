@@ -28,6 +28,7 @@ import org.ehrbase.api.annotations.TenantAware;
 import org.ehrbase.api.authorization.EhrbaseAuthorization;
 import org.ehrbase.api.authorization.EhrbasePermission;
 import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.api.exception.ObjectNotFoundExceptionType;
 import org.ehrbase.api.service.EhrService;
 import org.ehrbase.response.openehr.admin.AdminDeleteResponseData;
 import org.ehrbase.response.openehr.admin.AdminUpdateResponseData;
@@ -38,6 +39,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import static org.ehrbase.api.exception.ExceptionsTemplate.EHR_WITH_ID_DOES_NOT_EXIST;
 
 /**
  * Admin API controller for EHR related endpoints. Provides methods to update and delete EHRs physically in the DB.
@@ -93,7 +96,8 @@ public class AdminEhrController extends BaseController {
         // Check if EHR with id exists
         UUID ehrUuid = UUID.fromString(ehrId);
         if (!ehrService.hasEhr(ehrUuid)) {
-            throw new ObjectNotFoundException("Admin EHR", String.format("EHR with id %s does not exist.", ehrId));
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.ADMIN_EHR.getType(), AdminEhrController.class,
+                    EHR_WITH_ID_DOES_NOT_EXIST, String.format(EHR_WITH_ID_DOES_NOT_EXIST, ehrId));
         }
 
         // TODO: Implement endpoint functionality
@@ -123,7 +127,8 @@ public class AdminEhrController extends BaseController {
         UUID ehrUuid = UUID.fromString(ehrId);
         // Check if EHR with id exists
         if (!ehrService.hasEhr(ehrUuid)) {
-            throw new ObjectNotFoundException("Admin EHR", String.format("EHR with id %s does not exist.", ehrId));
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.ADMIN_EHR.getType(), AdminEhrController.class,
+                    EHR_WITH_ID_DOES_NOT_EXIST, String.format(EHR_WITH_ID_DOES_NOT_EXIST, ehrId));
         }
 
         ehrService.adminDeleteEhr(ehrUuid);

@@ -17,6 +17,8 @@
  */
 package org.ehrbase.dao.access.jooq;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.COMMIT_WITHOUT_TRANSACTION_TIME_IS_NOT_LEGAL;
+import static org.ehrbase.api.exception.ExceptionsTemplate.INVALID_UPDATE_COMPOSITION_CALL;
 import static org.ehrbase.jooq.pg.Tables.ENTRY;
 import static org.ehrbase.jooq.pg.Tables.ENTRY_HISTORY;
 import static org.ehrbase.jooq.pg.Tables.TERRITORY;
@@ -455,7 +457,7 @@ public class EntryAccess extends DataAccess implements I_EntryAccess {
     @Deprecated(forRemoval = true)
     @Override
     public UUID commit() {
-        throw new InternalServerException("INTERNAL: commit without transaction time is not legal");
+        throw new InternalServerException(EntryAccess.class, COMMIT_WITHOUT_TRANSACTION_TIME_IS_NOT_LEGAL);
     }
 
     @Override
@@ -502,8 +504,7 @@ public class EntryAccess extends DataAccess implements I_EntryAccess {
     @Deprecated(forRemoval = true)
     @Override
     public Boolean update() {
-        throw new InternalServerException(
-                "INTERNAL: Invalid updateComposition call to updateComposition without Transaction time and/or force flag arguments");
+        throw new InternalServerException(EntryAccess.class, INVALID_UPDATE_COMPOSITION_CALL);
     }
 
     /**
@@ -514,8 +515,7 @@ public class EntryAccess extends DataAccess implements I_EntryAccess {
     @Deprecated(forRemoval = true)
     @Override
     public Boolean update(Boolean force) {
-        throw new InternalServerException(
-                "INTERNAL: Invalid updateComposition call to updateComposition without Transaction time and/or force flag arguments");
+        throw new InternalServerException(EntryAccess.class, INVALID_UPDATE_COMPOSITION_CALL);
     }
 
     @Override

@@ -18,6 +18,13 @@
 package org.ehrbase.rest.openehr;
 
 import static org.apache.commons.lang3.StringUtils.unwrap;
+import static org.ehrbase.api.exception.ExceptionsTemplate.COULD_NOT_RETRIEVE_COMPOSITION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.DELETING_OF_COMPOSITION_FAILED;
+import static org.ehrbase.api.exception.ExceptionsTemplate.FAILED_TO_CREATE_COMPOSITION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.IF_MATCH_HEADER_DOES_NOT_MATCH_LATEST_EXISTING_VERSION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.NO_COMPOSITION_VERSION_MATCHING_THE_TIMESTAMP_CONDITION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.NO_EHR_WITH_THE_SUPPLIED_EHR_ID;
+import static org.ehrbase.api.exception.ExceptionsTemplate.UUID_FROM_INPUT_MUST_MATCH_GIVEN_VERSIONED_OBJECT_UID_IN_REQUEST_URL;
 
 import com.nedap.archie.rm.composition.Composition;
 import com.nedap.archie.rm.support.identification.ObjectVersionId;
@@ -39,6 +46,7 @@ import org.ehrbase.api.authorization.EhrbaseAuthorization;
 import org.ehrbase.api.authorization.EhrbasePermission;
 import org.ehrbase.api.exception.InternalServerException;
 import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.api.exception.ObjectNotFoundExceptionType;
 import org.ehrbase.api.exception.PreconditionFailedException;
 import org.ehrbase.api.exception.StateConflictException;
 import org.ehrbase.api.service.CompositionService;
@@ -118,7 +126,7 @@ public class OpenehrCompositionController extends BaseController implements Comp
 
         var compositionUuid = compositionService
                 .create(ehrId, compoObj)
-                .orElseThrow(() -> new InternalServerException("Failed to create composition"));
+                .orElseThrow(() -> new InternalServerException(OpenehrCompositionController.class, FAILED_TO_CREATE_COMPOSITION));
         URI uri = createLocationUri(EHR, ehrId.toString(), COMPOSITION, compositionUuid.toString());
 
         List<String> headerList = Arrays.asList(
@@ -191,7 +199,7 @@ public class OpenehrCompositionController extends BaseController implements Comp
                         + compositionService.getLastVersionNumber(
                                 extractVersionedObjectUidFromVersionUid(versionedObjectUid.toString())))
                 .equals(ifMatch))) {
-            throw new PreconditionFailedException("If-Match header does not match latest existing version");
+            throw new PreconditionFailedException(OpenehrCompositionController.class, IF_MATCH_HEADER_DOES_NOT_MATCH_LATEST_EXISTING_VERSION);
         }
 
         Composition compoObj = compositionService.buildComposition(composition, compositionFormat, null);
@@ -203,8 +211,7 @@ public class OpenehrCompositionController extends BaseController implements Comp
             // TODO it is further unclear what exactly the REST spec's "match" means, see:
             // https://github.com/openEHR/specifications-ITS-REST/issues/83
             if (!versionedObjectUid.equals(extractVersionedObjectUidFromVersionUid(id)))
-                throw new PreconditionFailedException(
-                        "UUID from input must match given versioned_object_uid in request URL");
+                throw new PreconditionFailedException(OpenehrCompositionController.class, UUID_FROM_INPUT_MUST_MATCH_GIVEN_VERSIONED_OBJECT_UID_IN_REQUEST_URL);
         });
 
         Optional<InternalResponse<CompositionResponseData>> respData =
@@ -213,7 +220,7 @@ public class OpenehrCompositionController extends BaseController implements Comp
             // ifMatch header has to be tested for correctness already above
             var compositionVersionUid = compositionService
                     .update(ehrId, new ObjectVersionId(ifMatch), compoObj)
-                    .orElseThrow(() -> new InternalServerException("Failed to create composition"))
+                    .orElseThrow(() -> new InternalServerException(OpenehrCompositionController.class, FAILED_TO_CREATE_COMPOSITION))
                     .toString();
 
             URI uri = createLocationUri(EHR, ehrId.toString(), COMPOSITION, compositionVersionUid);
@@ -284,9 +291,8 @@ public class OpenehrCompositionController extends BaseController implements Comp
         compositionService
                 .retrieve(ehrId, extractVersionedObjectUidFromVersionUid(precedingVersionUid), 1)
                 .orElseThrow(
-                        () -> new ObjectNotFoundException(
-                                "composition",
-                                "No EHR with the supplied ehr_id or no COMPOSITION with the supplied preceding_version_uid.")); // TODO check for ehr + composition match as well - wow to to that? should be part of deletion, according to openEHR platform spec --> postponed, see EHR-265
+                        () -> new ObjectNotFoundException(ObjectNotFoundExceptionType.COMPOSITION.getType(), OpenehrCompositionController.class,
+                                NO_EHR_WITH_THE_SUPPLIED_EHR_ID)); // TODO check for ehr + composition match as well - wow to to that? should be part of deletion, according to openEHR platform spec --> postponed, see EHR-265
 
         // TODO check if already deleted - how is that saved / retrievable? --> postponed, see EHR-264
         /*if () {
@@ -331,13 +337,12 @@ public class OpenehrCompositionController extends BaseController implements Comp
             return ResponseEntity.noContent().headers(headers).build();
         } catch (ObjectNotFoundException e) {
             // if composition not available at all --> 404
-            throw new ObjectNotFoundException(
-                    COMPOSITION,
-                    "No EHR with the supplied ehr_id or no COMPOSITION with the supplied " + "preceding_version_uid.");
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.COMPOSITION.getType(), OpenehrCompositionController.class,
+                    NO_EHR_WITH_THE_SUPPLIED_EHR_ID);
         } catch (StateConflictException e) {
             throw e;
         } catch (Exception e) {
-            throw new InternalServerException("Deleting of composition failed", e);
+            throw new InternalServerException(OpenehrCompositionController.class, DELETING_OF_COMPOSITION_FAILED);
         }
     }
 
@@ -379,8 +384,8 @@ public class OpenehrCompositionController extends BaseController implements Comp
                 // when optional request parameter was provided, retrieve version according to given time
                 version = temporal.map(OffsetDateTime::toLocalDateTime)
                         .map(t -> compositionService.getVersionByTimestamp(compositionUid, t))
-                        .orElseThrow(() -> new ObjectNotFoundException(
-                                COMPOSITION, "No composition version matching the timestamp condition"));
+                        .orElseThrow(() -> new ObjectNotFoundException(ObjectNotFoundExceptionType.COMPOSITION.getType(),
+                                OpenehrCompositionController.class, NO_COMPOSITION_VERSION_MATCHING_THE_TIMESTAMP_CONDITION));
             } // else continue with fallback: latest version
         }
 
@@ -489,7 +494,8 @@ public class OpenehrCompositionController extends BaseController implements Comp
                 // objByReference.setComposition(compositionService.serialize(compositionDto.get(), format));
             } else {
                 // TODO undo creation of composition, if applicable
-                throw new ObjectNotFoundException(COMPOSITION, "Couldn't retrieve composition");
+                throw new ObjectNotFoundException(ObjectNotFoundExceptionType.COMPOSITION.getType(),
+                        OpenehrCompositionController.class, COULD_NOT_RETRIEVE_COMPOSITION);
             }
 
             // finally set last header

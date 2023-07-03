@@ -17,6 +17,8 @@
  */
 package org.ehrbase.dao.access.jooq;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.FETCHING_ATTESTATION_FAILED;
+import static org.ehrbase.api.exception.ExceptionsTemplate.FETCHING_AUDIT_DETAILS_FAILED;
 import static org.ehrbase.jooq.pg.tables.Attestation.ATTESTATION;
 import static org.ehrbase.jooq.pg.tables.AuditDetails.AUDIT_DETAILS;
 
@@ -57,7 +59,7 @@ public class AttestationAccess extends DataAccess implements I_AttestationAccess
             this.attestationRecord =
                     getDataAccess().getContext().fetchOne(ATTESTATION, ATTESTATION.ID.eq(attestationId));
         } catch (Exception e) {
-            throw new InternalServerException("fetching attestation failed", e);
+            throw new InternalServerException(AttestationAccess.class, FETCHING_ATTESTATION_FAILED);
         }
 
         auditDetailsAccess = new AuditDetailsAccess(getDataAccess(), this.attestationRecord.getNamespace());
@@ -65,7 +67,7 @@ public class AttestationAccess extends DataAccess implements I_AttestationAccess
             auditDetailsAccess.setRecord(
                     getDataAccess().getContext().fetchOne(AUDIT_DETAILS, AUDIT_DETAILS.ID.eq(getAuditId())));
         } catch (Exception e) {
-            throw new InternalServerException("fetching audit_details failed", e);
+            throw new InternalServerException(AttestationAccess.class, FETCHING_AUDIT_DETAILS_FAILED);
         }
 
         return null;

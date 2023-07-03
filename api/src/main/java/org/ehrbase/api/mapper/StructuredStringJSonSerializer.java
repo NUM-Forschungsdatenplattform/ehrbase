@@ -37,7 +37,7 @@ public class StructuredStringJSonSerializer extends JsonSerializer<StructuredStr
                     jgen.writeRawValue(value.getValue());
                     break;
                 default:
-                    throw new UnexpectedSwitchCaseException(value.getFormat());
+                    throw new UnexpectedSwitchCaseException(UnexpectedSwitchCaseException.class, UnexpectedSwitchCaseException.formatMessage(value.getFormat()));
             }
         } else {
             switch (value.getFormat()) {
@@ -48,7 +48,7 @@ public class StructuredStringJSonSerializer extends JsonSerializer<StructuredStr
                     jgen.writeRawValue(value.getValue());
                     break;
                 default:
-                    throw new UnexpectedSwitchCaseException(value.getFormat());
+                    throw new UnexpectedSwitchCaseException(UnexpectedSwitchCaseException.class, UnexpectedSwitchCaseException.formatMessage(value.getFormat()));
             }
         }
     }

@@ -17,6 +17,10 @@
  */
 package org.ehrbase.dao.access.jooq;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.DATABASE_INCONSISTENCY;
+import static org.ehrbase.api.exception.ExceptionsTemplate.INVALID_UPDATE_COMPOSITION_CALL;
+import static org.ehrbase.api.exception.ExceptionsTemplate.PROBLEM_EXECUTING_DATABASE_OPERATION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.PROBLEM_WHEN_UPDATING_DB_ENTRY;
 import static org.ehrbase.jooq.pg.Tables.EVENT_CONTEXT;
 import static org.ehrbase.jooq.pg.Tables.EVENT_CONTEXT_HISTORY;
 import static org.ehrbase.jooq.pg.Tables.IDENTIFIER;
@@ -76,8 +80,6 @@ import org.slf4j.LoggerFactory;
  * @since 1.0
  */
 public class ContextAccess extends DataAccess implements I_ContextAccess {
-    private static final String DB_INCONSISTENCY = "DB inconsistency";
-
     private final Logger log = LoggerFactory.getLogger(ContextAccess.class);
     private final List<ParticipationRecord> participations = new ArrayList<>();
     private EventContextRecord eventContextRecord;
@@ -334,7 +336,7 @@ public class ContextAccess extends DataAccess implements I_ContextAccess {
         try {
             result = insertQuery.execute();
         } catch (DataAccessException e) {
-            throw new InternalServerException("Problem executing database operation", e);
+            throw new InternalServerException(ContextAccess.class, PROBLEM_EXECUTING_DATABASE_OPERATION);
         }
 
         if (result < 1) throw new IllegalArgumentException("Context commit failed");
@@ -378,7 +380,7 @@ public class ContextAccess extends DataAccess implements I_ContextAccess {
                 participationRecord.setId(UuidGenerator.randomUUID());
                 participationRecord.store();
             } catch (DataAccessException e) { // generalize DB exceptions
-                throw new InternalServerException(DB_INCONSISTENCY, e);
+                throw new InternalServerException(ContextAccess.class, DATABASE_INCONSISTENCY);
             }
         }
         // ignore the temporal field since it is maintained by an external trigger!
@@ -405,7 +407,7 @@ public class ContextAccess extends DataAccess implements I_ContextAccess {
         try {
             result = updateQuery.execute() > 0;
         } catch (DataAccessException e) { // generalize DB exceptions
-            throw new InternalServerException("Problem when updating DB entry", e);
+            throw new InternalServerException(ContextAccess.class, PROBLEM_WHEN_UPDATING_DB_ENTRY);
         }
 
         return result;
@@ -437,8 +439,7 @@ public class ContextAccess extends DataAccess implements I_ContextAccess {
     @Deprecated
     @Override
     public Boolean update() {
-        throw new InternalServerException(
-                "INTERNAL: Invalid updateComposition call to updateComposition without Transaction time and/or force flag arguments");
+        throw new InternalServerException(ContextAccess.class, INVALID_UPDATE_COMPOSITION_CALL);
     }
 
     /**
@@ -448,8 +449,7 @@ public class ContextAccess extends DataAccess implements I_ContextAccess {
     @Deprecated
     @Override
     public Boolean update(Boolean force) {
-        throw new InternalServerException(
-                "INTERNAL: Invalid updateComposition call to updateComposition without Transaction time and/or force flag arguments");
+        throw new InternalServerException(ContextAccess.class, INVALID_UPDATE_COMPOSITION_CALL);
     }
 
     @Override

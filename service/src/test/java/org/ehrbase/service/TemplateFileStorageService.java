@@ -43,10 +43,14 @@ import org.apache.commons.io.input.BOMInputStream;
 import org.apache.xmlbeans.XmlOptions;
 import org.ehrbase.api.exception.InternalServerException;
 import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.api.exception.ObjectNotFoundExceptionType;
 import org.ehrbase.dao.access.support.TenantSupport;
 import org.ehrbase.ehr.knowledge.TemplateMetaData;
 import org.ehrbase.util.TemplateUtils;
 import org.openehr.schemas.v1.OPERATIONALTEMPLATE;
+
+import static org.ehrbase.api.exception.ExceptionsTemplate.EXCEPTION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.FILE_WITH_NAME_DOES_NOT_EXIST;
 
 public class TemplateFileStorageService implements TemplateStorage {
     private final Supplier<String> ct = () -> TenantSupport.currentTenantIdentifier();
@@ -155,9 +159,9 @@ public class TemplateFileStorageService implements TemplateStorage {
         try {
             File file = optFileMap.get(CacheKey.of(template.getTemplateId().getValue(), ct.get()));
             if (!file.exists()) {
-                throw new ObjectNotFoundException(
-                        "ADMIN TEMPLATE STORE FILESYSTEM",
-                        String.format("File with name %s does not exist", template.getTemplateId()));
+                throw new ObjectNotFoundException(ObjectNotFoundExceptionType.ADMIN_TEMPLATE_STORE_FILESYSTEM.getType(),
+                        TemplateFileStorageService.class, FILE_WITH_NAME_DOES_NOT_EXIST,
+                        String.format(FILE_WITH_NAME_DOES_NOT_EXIST, template.getTemplateId()));
             }
 
             // Remove old content
@@ -174,7 +178,7 @@ public class TemplateFileStorageService implements TemplateStorage {
 
             return template.xmlText(opts);
         } catch (IOException e) {
-            throw new InternalServerException(e.getMessage());
+            throw new InternalServerException(TemplateFileStorageService.class, EXCEPTION);
         }
     }
 
@@ -187,13 +191,14 @@ public class TemplateFileStorageService implements TemplateStorage {
         try {
             File file = optFileMap.get(CacheKey.of(templateId, ct.get()));
             if (!file.exists())
-                throw new ObjectNotFoundException(
-                        "ADMIN TEMPLATE", String.format("File with name %s does not exist.", templateId));
+                throw new ObjectNotFoundException(ObjectNotFoundExceptionType.ADMIN_TEMPLATE.getType(),
+                        TemplateFileStorageService.class, FILE_WITH_NAME_DOES_NOT_EXIST,
+                        String.format(FILE_WITH_NAME_DOES_NOT_EXIST, templateId));
             deleted = Files.deleteIfExists(file.toPath());
             if (deleted) optFileMap.remove(CacheKey.of(templateId, ct.get()));
             return deleted;
         } catch (IOException e) {
-            throw new InternalServerException(e.getMessage());
+            throw new InternalServerException(TemplateFileStorageService.class, EXCEPTION);
         }
     }
 
@@ -203,7 +208,7 @@ public class TemplateFileStorageService implements TemplateStorage {
             try {
                 Files.deleteIfExists(file.toPath());
             } catch (IOException e) {
-                throw new InternalServerException(e.getMessage());
+                throw new InternalServerException(TemplateFileStorageService.class, EXCEPTION);
             }
         });
         optFileMap.clear();

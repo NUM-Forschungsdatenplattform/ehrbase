@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.apache.commons.lang3.StringUtils;
+import org.ehrbase.api.exception.CustomizedExceptionHandler;
 import org.ehrbase.api.exception.InternalServerException;
 import org.ehrbase.api.exception.InvalidApiParameterException;
 import org.ehrbase.api.exception.NotAcceptableException;
@@ -40,6 +41,9 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import org.springframework.web.util.UriComponentsBuilder;
 import org.springframework.web.util.UriUtils;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.ONLY_COMPOSISIONS_IN_XML_OR_JSON_ARE_SUPPORTED;
+import static org.ehrbase.api.exception.ExceptionsTemplate.WRONG_CONTENT_TYPE_IN_HEADER_REQUEST;
+
 /**
  * This base controller implements the basic functionality for all specific controllers. This
  * includes error handling and utils.
@@ -48,7 +52,7 @@ import org.springframework.web.util.UriUtils;
  * @author Jake Smolka
  * @since 1.0.0
  */
-public abstract class BaseController {
+public abstract class BaseController  extends CustomizedExceptionHandler {
 
     // HTTP Headers
 
@@ -192,7 +196,7 @@ public abstract class BaseController {
         try {
             uuid = UUID.fromString(uuidString);
         } catch (IllegalArgumentException e) {
-            throw new ObjectNotFoundException(type, error);
+            throw new ObjectNotFoundException(type, BaseController.class, error);
         }
         return uuid;
     }
@@ -215,7 +219,7 @@ public abstract class BaseController {
         } else if (mediaType.isCompatibleWith(MediaType.APPLICATION_JSON)) {
             compositionFormat = CompositionFormat.JSON;
         } else {
-            throw new NotAcceptableException("Only compositions in XML or JSON are supported at the moment");
+            throw new NotAcceptableException(BaseController.class, ONLY_COMPOSISIONS_IN_XML_OR_JSON_ARE_SUPPORTED);
         }
         return compositionFormat;
     }
@@ -295,7 +299,7 @@ public abstract class BaseController {
                 .filter(mediaType -> mediaType.isCompatibleWith(MediaType.APPLICATION_JSON)
                         || mediaType.isCompatibleWith(MediaType.APPLICATION_XML))
                 .findFirst()
-                .orElseThrow(() -> new InvalidApiParameterException("Wrong Content-Type header in request"));
+                .orElseThrow(() -> new InvalidApiParameterException(BaseController.class, WRONG_CONTENT_TYPE_IN_HEADER_REQUEST));
 
         if (contentType.equals(MediaType.ALL)) {
             return defaultMediaType;

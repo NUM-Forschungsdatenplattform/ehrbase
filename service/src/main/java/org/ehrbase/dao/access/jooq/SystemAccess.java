@@ -17,6 +17,7 @@
  */
 package org.ehrbase.dao.access.jooq;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.THIS_UPDATE_SIGNATURE_IS_NOT_VALID;
 import static org.ehrbase.jooq.pg.Tables.SYSTEM;
 
 import java.sql.Timestamp;
@@ -122,7 +123,7 @@ public class SystemAccess extends DataAccess implements I_SystemAccess {
     @Deprecated
     @Override
     public Boolean update() {
-        throw new InternalServerException("INTERNAL: this update signature is not valid");
+        throw new InternalServerException(SystemAccess.class, THIS_UPDATE_SIGNATURE_IS_NOT_VALID);
     }
 
     /**
@@ -132,7 +133,7 @@ public class SystemAccess extends DataAccess implements I_SystemAccess {
     @Deprecated
     @Override
     public Boolean update(Boolean force) {
-        throw new InternalServerException("INTERNAL: this update signature is not valid");
+        throw new InternalServerException(SystemAccess.class, THIS_UPDATE_SIGNATURE_IS_NOT_VALID);
     }
 
     @Override

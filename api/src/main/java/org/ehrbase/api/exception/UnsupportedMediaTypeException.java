@@ -17,6 +17,9 @@
  */
 package org.ehrbase.api.exception;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
 /**
  * Runtime Exception to handle a not supported media type which a client
  * has specified as the response type. I.e. if the header "accept" exists with
@@ -26,13 +29,10 @@ package org.ehrbase.api.exception;
  *
  * @see RuntimeException
  */
+@AllArgsConstructor
+@Getter
 public class UnsupportedMediaTypeException extends RuntimeException {
+    private final Class<?> entity;
+    private final String entityId;
 
-    public UnsupportedMediaTypeException(String message) {
-        super(message);
-    }
-
-    public UnsupportedMediaTypeException(String message, Throwable cause) {
-        super(message, cause);
-    }
 }

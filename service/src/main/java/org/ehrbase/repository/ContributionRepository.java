@@ -154,7 +154,7 @@ public class ContributionRepository {
             case "252" -> ContributionChangeType.synthesis;
             case "253" -> ContributionChangeType.Unknown;
             case "523" -> ContributionChangeType.deleted;
-            default -> throw new UnexpectedSwitchCaseException(changeType.toString());
+            default -> throw new UnexpectedSwitchCaseException(ContributionRepository.class, changeType.toString());
         };
     }
 }

@@ -41,6 +41,9 @@ import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.core.env.PropertySource;
 import org.springframework.core.io.FileSystemResource;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.IO_EXCEPTION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.NO_PROPERTY_SOURCE_FOUND_FOR;
+
 /**
  * @author Stefan Spiska
  */
@@ -101,14 +104,16 @@ public class EhrBasePluginManager extends SpringPluginManager implements EhrBase
 
                         return p.load(fileName, new FileSystemResource(totalPath));
                     } catch (IOException e) {
-                        throw new InternalServerException(e);
+                        throw new InternalServerException(EhrBasePluginManager.class, IO_EXCEPTION);
                     }
                 })
                 .stream()
                 .flatMap(List::stream)
                 .findAny()
                 .orElseThrow(
-                        () -> new InternalServerException(String.format("No Property Source found for %s", totalPath)));
+                        () -> new InternalServerException(EhrBasePluginManager.class,
+                                NO_PROPERTY_SOURCE_FOUND_FOR,
+                                String.format(NO_PROPERTY_SOURCE_FOUND_FOR, totalPath)));
     }
 
     public List<PropertySource<?>> loadConfig(PluginWrapper pluginWrapper) {
@@ -122,7 +127,7 @@ public class EhrBasePluginManager extends SpringPluginManager implements EhrBase
                         .collect(Collectors.toList());
 
             } catch (IOException e) {
-                throw new InternalServerException(e);
+                throw new InternalServerException(EhrBasePluginManager.class, IO_EXCEPTION);
             }
         }
 

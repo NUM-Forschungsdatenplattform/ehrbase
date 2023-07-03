@@ -17,6 +17,8 @@
  */
 package org.ehrbase.rest.ehrscape.controller;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.FAILED_TO_CREATE_COMPOSITION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.TEMPLATE_ID_NEEDS_TO_BE_SPECIFIED_FOR_FORMAT;
 import static org.ehrbase.rest.ehrscape.controller.BaseController.API_ECIS_CONTEXT_PATH_WITH_VERSION;
 
 import com.nedap.archie.rm.support.identification.ObjectVersionId;
@@ -77,14 +79,14 @@ public class CompositionController extends BaseController {
                         || format == CompositionFormat.STRUCTURED
                         || format == CompositionFormat.ECISFLAT)
                 && StringUtils.isEmpty(templateId)) {
-            throw new InvalidApiParameterException(
-                    String.format("Template Id needs to specified for format %s", format));
+            throw new InvalidApiParameterException(CompositionController.class, TEMPLATE_ID_NEEDS_TO_BE_SPECIFIED_FOR_FORMAT,
+                    String.format(TEMPLATE_ID_NEEDS_TO_BE_SPECIFIED_FOR_FORMAT, format));
         }
 
         var composition = compositionService.buildComposition(content, format, templateId);
         var compositionUuid = compositionService
                 .create(ehrId, composition)
-                .orElseThrow(() -> new InternalServerException("Failed to create composition"));
+                .orElseThrow(() -> new InternalServerException(CompositionController.class, FAILED_TO_CREATE_COMPOSITION));
 
         var responseData = new CompositionWriteRestResponseData();
         responseData.setAction(Action.CREATE);
@@ -148,8 +150,8 @@ public class CompositionController extends BaseController {
                         || format == CompositionFormat.STRUCTURED
                         || format == CompositionFormat.ECISFLAT)
                 && StringUtils.isEmpty(templateId)) {
-            throw new InvalidApiParameterException(
-                    String.format("Template Id needs to specified for format %s", format));
+            throw new InvalidApiParameterException(CompositionController.class,
+                    String.format(TEMPLATE_ID_NEEDS_TO_BE_SPECIFIED_FOR_FORMAT, format));
         }
 
         ObjectVersionId objectVersionId = getObjectVersionId(compositionUid);
@@ -162,7 +164,7 @@ public class CompositionController extends BaseController {
         Optional<UUID> dtoOptional = compositionService.update(ehrId, objectVersionId, compoObj);
 
         var compositionVersionUid = dtoOptional
-                .orElseThrow(() -> new InternalServerException("Failed to create composition"))
+                .orElseThrow(() -> new InternalServerException(CompositionController.class, FAILED_TO_CREATE_COMPOSITION))
                 .toString();
         ActionRestResponseData responseData = new ActionRestResponseData();
         responseData.setAction(Action.UPDATE);

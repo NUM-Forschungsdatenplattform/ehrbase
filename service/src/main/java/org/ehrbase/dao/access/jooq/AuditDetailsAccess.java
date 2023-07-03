@@ -17,6 +17,10 @@
  */
 package org.ehrbase.dao.access.jooq;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.COULD_NT_STORE_AUDIT_DETAILS_DB_PROBLEM;
+import static org.ehrbase.api.exception.ExceptionsTemplate.FETCHING_AUDIT_DETAILS_FAILED;
+import static org.ehrbase.api.exception.ExceptionsTemplate.TENANT_ID_MISMATCH;
+import static org.ehrbase.api.exception.ExceptionsTemplate.TENANT_ID_MISMATCH_CALLING_FOR_ID;
 import static org.ehrbase.jooq.pg.tables.AuditDetails.AUDIT_DETAILS;
 
 import com.nedap.archie.rm.datatypes.CodePhrase;
@@ -74,9 +78,9 @@ public class AuditDetailsAccess extends DataAccess implements I_AuditDetailsAcce
             auditDetailsAccess.auditDetailsRecord =
                     dataAccess.getContext().fetchOne(AUDIT_DETAILS, AUDIT_DETAILS.ID.eq(auditId));
             if (!auditDetailsAccess.auditDetailsRecord.getNamespace().equals(this.auditDetailsRecord.getNamespace()))
-                throw new InternalServerException("Tenant id mismatch: Calling for id");
+                throw new InternalServerException(AuditDetailsAccess.class, TENANT_ID_MISMATCH_CALLING_FOR_ID);
         } catch (Exception e) {
-            throw new InternalServerException("fetching audit_details failed", e);
+            throw new InternalServerException(AttestationAccess.class, FETCHING_AUDIT_DETAILS_FAILED);
         }
 
         if (auditDetailsAccess.auditDetailsRecord == null) // FIXME can this even happen?
@@ -102,7 +106,7 @@ public class AuditDetailsAccess extends DataAccess implements I_AuditDetailsAcce
         if (result == 1) {
             return auditDetailsRecord.getId();
         } else {
-            throw new InternalServerException("Couldn't store auditDetails, DB problem");
+            throw new InternalServerException(AuditDetailsAccess.class, COULD_NT_STORE_AUDIT_DETAILS_DB_PROBLEM);
         }
     }
 
@@ -241,7 +245,7 @@ public class AuditDetailsAccess extends DataAccess implements I_AuditDetailsAcce
     public void setRecord(AuditDetailsRecord record) {
         if (StringUtils.isEmpty(record.getNamespace())) record.setNamespace(this.auditDetailsRecord.getNamespace());
         if (!this.auditDetailsRecord.getNamespace().equals(record.getNamespace()))
-            throw new InternalServerException("Tenant id mismatch");
+            throw new InternalServerException(AuditDetailsAccess.class, TENANT_ID_MISMATCH);
         this.auditDetailsRecord = record;
     }
 

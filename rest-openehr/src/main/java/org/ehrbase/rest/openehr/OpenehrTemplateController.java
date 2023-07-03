@@ -17,6 +17,9 @@
  */
 package org.ehrbase.rest.openehr;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.BUILDING_TEMPLATE_RESPONSE_DATA_FAILED;
+import static org.ehrbase.api.exception.ExceptionsTemplate.CURRENTLY_ONLY_XML_IS_ALLOWED;
+import static org.ehrbase.api.exception.ExceptionsTemplate.EXCEPTION;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.http.MediaType.APPLICATION_XML;
 
@@ -114,7 +117,7 @@ public class OpenehrTemplateController extends BaseController implements Templat
             document =
                     TemplateDocument.Factory.parse(new ByteArrayInputStream(template.getBytes(StandardCharsets.UTF_8)));
         } catch (XmlException | IOException e) {
-            throw new InvalidApiParameterException(e.getMessage());
+            throw new InvalidApiParameterException(OpenehrTemplateController.class, EXCEPTION);
         }
 
         String templateId = templateService.create(document.getTemplate());
@@ -349,7 +352,7 @@ public class OpenehrTemplateController extends BaseController implements Templat
         } else if (mediaType.isCompatibleWith(MediaType.APPLICATION_JSON)) {
             format = OperationalTemplateFormat.JSON;
         } else {
-            throw new NotAcceptableException("Currently only xml (or emtpy for fallback) is allowed");
+            throw new NotAcceptableException(OpenehrTemplateController.class, CURRENTLY_ONLY_XML_IS_ALLOWED);
         }
 
         // is null when request wants only metadata returned, so skips provisioning of body if null
@@ -373,7 +376,7 @@ public class OpenehrTemplateController extends BaseController implements Templat
                 objByReference.set(templates);
             } else
                 throw new InternalServerException(
-                        "Building template response data failed"); // i.e. wrong usage of buildTemplateResponseData()
+                        OpenehrEhrStatusController.class, BUILDING_TEMPLATE_RESPONSE_DATA_FAILED); // i.e. wrong usage of buildTemplateResponseData()
         }
 
         return Optional.of(new InternalResponse<>(oneOrAllTemplates, respHeaders));

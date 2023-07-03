@@ -17,18 +17,18 @@
  */
 package org.ehrbase.api.exception;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
 /**
  * Project-custom exception that allows outbound APIs to react on backend problems. Shall be thrown to invoke
  * status 400 "Bad Request" or whatever is appropriate.
  * To be thrown in all cases where part of the request leads to problems, like malformed queries or non-existent referenced objects.
  */
+@Getter
+@AllArgsConstructor
 public class GeneralRequestProcessingException extends RuntimeException {
 
-    public GeneralRequestProcessingException(String message) {
-        super(message);
-    }
-
-    public GeneralRequestProcessingException(String message, Throwable cause) {
-        super(message, cause);
-    }
+    private final Class<?> entity;
+    private final String entityId;
 }

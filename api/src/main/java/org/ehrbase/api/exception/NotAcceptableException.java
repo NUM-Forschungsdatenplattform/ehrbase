@@ -17,9 +17,14 @@
  */
 package org.ehrbase.api.exception;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
+@AllArgsConstructor
+@Getter
 public class NotAcceptableException extends RuntimeException {
 
-    public NotAcceptableException(String message) {
-        super(message);
-    }
+    private final Class<?> entity;
+    private final String entityId;
+
 }

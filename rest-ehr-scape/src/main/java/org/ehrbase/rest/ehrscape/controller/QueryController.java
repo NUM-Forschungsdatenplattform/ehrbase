@@ -37,6 +37,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.NO_QUERY_PARAMETER_SUPPLIED;
+import static org.ehrbase.api.exception.ExceptionsTemplate.SQL_QUERIES_ARE_NO_LONGER_SUPPORTED;
+
 @TenantAware
 @RestController
 @RequestMapping(
@@ -78,9 +81,9 @@ public class QueryController extends BaseController {
             return query.substring(query.indexOf('\"') + 1);
 
         } else if ("sql".equalsIgnoreCase(type)) {
-            throw new InvalidApiParameterException("SQL queries are no longer supported");
+            throw new InvalidApiParameterException(QueryController.class, SQL_QUERIES_ARE_NO_LONGER_SUPPORTED);
         } else {
-            throw new InvalidApiParameterException("No query parameter supplied");
+            throw new InvalidApiParameterException(QueryController.class, NO_QUERY_PARAMETER_SUPPLIED);
         }
     }
 }

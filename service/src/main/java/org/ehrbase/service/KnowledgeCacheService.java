@@ -73,6 +73,11 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
+import static org.ehrbase.api.exception.ExceptionsTemplate.COULD_NOT_PARSE_INPUT_TEMPLATE;
+import static org.ehrbase.api.exception.ExceptionsTemplate.EXCEPTION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.INVALID_TEMPLATE_INPUT_CONTENT;
+import static org.ehrbase.api.exception.ExceptionsTemplate.OPERATIONAL_TEMPLATE_WITH_THIS_TEMPLATE_ID_ALREADY_EXISTS;
+
 /**
  * Look up and caching for archetypes, openEHR showTemplates and Operational Templates. Search in
  * path defined as
@@ -246,7 +251,7 @@ public class KnowledgeCacheService implements I_KnowledgeCache, IntrospectServic
             TemplateDocument document = TemplateDocument.Factory.parse(content);
             return document.getTemplate();
         } catch (XmlException | IOException e) {
-            throw new InvalidApiParameterException(e.getMessage());
+            throw new InvalidApiParameterException(KnowledgeCacheService.class, EXCEPTION);
         }
     }
 
@@ -265,15 +270,14 @@ public class KnowledgeCacheService implements I_KnowledgeCache, IntrospectServic
         try {
             templateId = TemplateUtils.getTemplateId(template);
         } catch (IllegalArgumentException a) {
-            throw new InvalidApiParameterException("Invalid template input content");
+            throw new InvalidApiParameterException(KnowledgeCacheService.class, INVALID_TEMPLATE_INPUT_CONTENT);
         }
 
         // pre-check: if already existing throw proper exception
         if (!allowTemplateOverwrite
                 && !overwrite
                 && retrieveOperationalTemplate(templateId).isPresent()) {
-            throw new StateConflictException(
-                    "Operational template with this template ID already exists: " + templateId);
+            throw new StateConflictException(KnowledgeCacheService.class, OPERATIONAL_TEMPLATE_WITH_THIS_TEMPLATE_ID_ALREADY_EXISTS.formatted(templateId));
         } else {
             invalidateCache(template);
         }
@@ -562,7 +566,7 @@ public class KnowledgeCacheService implements I_KnowledgeCache, IntrospectServic
      */
     private void validateTemplate(OPERATIONALTEMPLATE template) {
         if (template == null) {
-            throw new InvalidApiParameterException("Could not parse input template");
+            throw new InvalidApiParameterException(KnowledgeCacheService.class, COULD_NOT_PARSE_INPUT_TEMPLATE);
         }
 
         if (template.getConcept() == null || template.getConcept().isEmpty()) {

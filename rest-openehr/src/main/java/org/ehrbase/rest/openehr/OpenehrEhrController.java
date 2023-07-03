@@ -35,6 +35,7 @@ import org.ehrbase.api.authorization.EhrbasePermission;
 import org.ehrbase.api.exception.InternalServerException;
 import org.ehrbase.api.exception.InvalidApiParameterException;
 import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.api.exception.ObjectNotFoundExceptionType;
 import org.ehrbase.api.exception.StateConflictException;
 import org.ehrbase.api.service.EhrService;
 import org.ehrbase.response.openehr.EhrResponseData;
@@ -58,6 +59,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
+
+import static org.ehrbase.api.exception.ExceptionsTemplate.EHR_ID_FORMAT_NOT_A_UUID;
+import static org.ehrbase.api.exception.ExceptionsTemplate.EHR_WITH_THIS_ID_ALREADY_EXISTS;
+import static org.ehrbase.api.exception.ExceptionsTemplate.ERROR_CREATING_EHR_WITH_CUSTOM_ID_AND_OR_STATUS;
+import static org.ehrbase.api.exception.ExceptionsTemplate.EXCEPTION;
+import static org.ehrbase.api.exception.ExceptionsTemplate.NO_EHR_WITH_SUPPLIED_SUBJECT_PARAMETERS_FOUND;
+import static org.ehrbase.api.exception.ExceptionsTemplate.NO_EHR_WITH_THIS_ID_CAN_BE_FOUND;
 
 /**
  * Controller for /ehr resource of openEHR REST API
@@ -119,11 +127,11 @@ public class OpenehrEhrController extends BaseController implements EhrApiSpecif
         try {
             ehrId = UUID.fromString(ehrIdString);
         } catch (IllegalArgumentException e) {
-            throw new InvalidApiParameterException("EHR ID format not a UUID");
+            throw new InvalidApiParameterException(OpenehrDirectoryController.class, EHR_ID_FORMAT_NOT_A_UUID);
         }
 
         if (ehrService.hasEhr(ehrId)) {
-            throw new StateConflictException("EHR with this ID already exists");
+            throw new StateConflictException(OpenehrEhrStatusController.class, EHR_WITH_THIS_ID_ALREADY_EXISTS);
         }
 
         final UUID resultEhrId;
@@ -134,7 +142,7 @@ public class OpenehrEhrController extends BaseController implements EhrApiSpecif
         }
 
         if (!ehrId.equals(resultEhrId)) {
-            throw new InternalServerException("Error creating EHR with custom ID and/or status");
+            throw new InternalServerException(OpenehrCompositionController.class, ERROR_CREATING_EHR_WITH_CUSTOM_ID_AND_OR_STATUS);
         }
 
         return internalPostEhrProcessing(accept, prefer, resultEhrId, request);
@@ -188,7 +196,8 @@ public class OpenehrEhrController extends BaseController implements EhrApiSpecif
         UUID ehrId = getEhrUuid(ehrIdString);
 
         if (!ehrService.hasEhr(ehrId)) {
-            throw new ObjectNotFoundException("ehr", "No EHR with this ID can be found");
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.EHR.getType(),
+                    OpenehrEhrController.class, NO_EHR_WITH_THIS_ID_CAN_BE_FOUND);
         }
 
         return internalGetEhrProcessing(accept, ehrId, request);
@@ -210,7 +219,8 @@ public class OpenehrEhrController extends BaseController implements EhrApiSpecif
         Optional<UUID> ehrIdOpt = ehrService.findBySubject(subjectId, subjectNamespace);
 
         UUID ehrId = ehrIdOpt.orElseThrow(
-                () -> new ObjectNotFoundException("ehr", "No EHR with supplied subject parameters found"));
+                () -> new ObjectNotFoundException(ObjectNotFoundExceptionType.EHR.getType(),
+                        OpenehrEhrController.class, NO_EHR_WITH_SUPPLIED_SUBJECT_PARAMETERS_FOUND));
 
         return internalGetEhrProcessing(accept, ehrId, request);
     }
@@ -276,7 +286,7 @@ public class OpenehrEhrController extends BaseController implements EhrApiSpecif
                         URI url = createLocationUri(EHR, ehrId.toString());
                         respHeaders.setLocation(url);
                     } catch (Exception e) {
-                        throw new InternalServerException(e.getMessage());
+                        throw new InternalServerException(OpenehrCompositionController.class, EXCEPTION);
                     }
                     break;
                 case ETAG:

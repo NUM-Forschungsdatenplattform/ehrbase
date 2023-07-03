@@ -19,6 +19,9 @@ package org.ehrbase.api.exception;
 
 import org.apache.commons.lang3.StringUtils;
 
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+
 /**
  * <p>
  * This exception is thrown when a case has occurred in a switch block that cannot be handled correctly.
@@ -33,95 +36,18 @@ import org.apache.commons.lang3.StringUtils;
  *
  * @author Jan Falkenstern, Stefan Kock
  */
+@AllArgsConstructor
+@Getter
 public class UnexpectedSwitchCaseException extends RuntimeException {
 
     private static final long serialVersionUID = 5695009820197756438L;
 
-    /**
-     * Creates a message from the <code>enumValue</code> parameter.<br />
-     * The message is based on <code>enumValue.name()</code>,
-     * so that the format is stable, e.g. in case of i18n.
-     *
-     * @param enumValue must not be null
-     */
-    public UnexpectedSwitchCaseException(Enum<?> enumValue) {
-        super(formatMessage(enumValue, null));
-    }
+    private final Class<?> entity;
+    private final String entityId;
 
-    /**
-     * Creates a message from the <code>enumValue</code> parameter.<br />
-     * The message is based on <code>enumValue.name()</code>,
-     * so that the format is stable, e.g. in case of i18n.
-     *
-     * @param enumValue         must not be null
-     * @param additionalMessage additional text for generated message
-     */
-    public UnexpectedSwitchCaseException(Enum<?> enumValue, String additionalMessage) {
-        super(formatMessage(enumValue, additionalMessage));
-    }
+    public static String formatMessage(Enum<?> enumValue) {
 
-    /**
-     * Creates a message from the <code>intValue</code> parameter
-     *
-     * @param intValue
-     */
-    public UnexpectedSwitchCaseException(Integer intValue) {
-        super(formatMessage(intValue, null));
-    }
-
-    /**
-     * Creates a message from the <code>intValue</code> parameter
-     *
-     * @param intValue
-     * @param additionalMessage additional text for generated message
-     */
-    public UnexpectedSwitchCaseException(Integer intValue, String additionalMessage) {
-        super(formatMessage(intValue, additionalMessage));
-    }
-
-    /**
-     * Creates a message from the <code>stringValue</code> parameter
-     *
-     * @param stringValue
-     */
-    public UnexpectedSwitchCaseException(String stringValue) {
-        super(formatMessage(stringValue, null));
-    }
-
-    /**
-     * Creates a message from the <code>stringValue</code> parameter
-     *
-     * @param stringValue
-     * @param additionalMessage additional text for generated message
-     */
-    public UnexpectedSwitchCaseException(String stringValue, String additionalMessage) {
-        super(formatMessage(stringValue, additionalMessage));
-    }
-
-    /**
-     * Creates the message of a {@link UnexpectedSwitchCaseException} containing the simple class name of the <code>enumValue</code> parameter.
-     * The message is based on <code>enumValue.name()</code>,
-     * so that the format is stable, e.g. in case of i18n.
-     *
-     * @param enumValue         must not be null
-     * @param additionalMessage additional text for generated message (optional)
-     * @return
-     */
-    public static String formatMessage(Enum<?> enumValue, String additionalMessage) {
-
-        return formatMessage(enumValue.getClass().getSimpleName(), enumValue.name(), additionalMessage);
-    }
-
-    /**
-     * Creates the message of a {@link UnexpectedSwitchCaseException} based on the given parameters.
-     *
-     * @param value
-     * @param additionalMessage additional text for generated message (optional)
-     * @return
-     */
-    public static String formatMessage(Object value, String additionalMessage) {
-
-        return formatMessage(null, value, additionalMessage);
+        return formatMessage(enumValue.getClass().getSimpleName(), enumValue.name(), null);
     }
 
     /**
@@ -130,7 +56,7 @@ public class UnexpectedSwitchCaseException extends RuntimeException {
      * @param type              e.g. <code>enumValue.getClass().getSimpleName()</code>
      * @param value             unsupported value in switch
      * @param additionalMessage additional text for generated message (optional)
-     * @return
+     * @return formatted string
      */
     public static String formatMessage(String type, Object value, String additionalMessage) {
 
