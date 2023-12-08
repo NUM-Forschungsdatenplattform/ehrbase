@@ -80,7 +80,7 @@ public class AuditDetailsAccess extends DataAccess implements I_AuditDetailsAcce
             if (!auditDetailsAccess.auditDetailsRecord.getSysTenant().equals(this.auditDetailsRecord.getSysTenant()))
                 throw new InternalServerException(AuditDetailsAccess.class, TENANT_ID_MISMATCH_CALLING_FOR_ID);
         } catch (Exception e) {
-            throw new InternalServerException(AttestationAccess.class, FETCHING_AUDIT_DETAILS_FAILED);
+            throw new InternalServerException(AuditDetailsAccess.class, FETCHING_AUDIT_DETAILS_FAILED);
         }
 
         if (auditDetailsAccess.auditDetailsRecord == null) // FIXME can this even happen?

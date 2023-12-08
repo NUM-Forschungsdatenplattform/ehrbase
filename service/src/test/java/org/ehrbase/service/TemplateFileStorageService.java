@@ -44,6 +44,7 @@ import org.apache.xmlbeans.XmlOptions;
 import org.ehrbase.api.exception.InternalServerException;
 import org.ehrbase.api.exception.ObjectNotFoundException;
 import org.ehrbase.api.exception.ObjectNotFoundExceptionType;
+import org.ehrbase.api.tenant.TenantAuthentication;
 import org.ehrbase.ehr.knowledge.TemplateMetaData;
 import org.ehrbase.util.TemplateUtils;
 import org.openehr.schemas.v1.OPERATIONALTEMPLATE;

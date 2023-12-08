@@ -43,13 +43,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.ehrbase.api.definitions.ServerConfig;
-import org.ehrbase.api.exception.InternalServerException;
-import org.ehrbase.api.exception.InvalidApiParameterException;
-import org.ehrbase.api.exception.ObjectNotFoundException;
-import org.ehrbase.api.exception.ObjectNotFoundExceptionType;
-import org.ehrbase.api.exception.UnexpectedSwitchCaseException;
-import org.ehrbase.api.exception.UnprocessableEntityException;
-import org.ehrbase.api.exception.ValidationException;
+import org.ehrbase.api.exception.*;
 import org.ehrbase.api.service.CompositionService;
 import org.ehrbase.api.service.EhrService;
 import org.ehrbase.api.service.TenantService;
@@ -187,14 +181,14 @@ public class CompositionServiceImp extends BaseServiceImp implements Composition
         if (composition.getUid() instanceof ObjectVersionId objectVersionId) {
 
             if (!"1".equals(objectVersionId.getVersionTreeId().getValue())) {
-                throw new PreconditionFailedException(
+                throw new PreconditionFailedException(CompositionServiceImp.class,
                         "Provided Id %s has a invalid Version. Expect Version 1".formatted(composition.getUid()));
             }
 
             if (!Objects.equals(
                     getDataAccess().getServerConfig().getNodename(),
                     objectVersionId.getCreatingSystemId().getValue())) {
-                throw new PreconditionFailedException("Mismatch of creating_system_id: %s !=: %s"
+                throw new PreconditionFailedException(CompositionServiceImp.class,"Mismatch of creating_system_id: %s !=: %s"
                         .formatted(
                                 objectVersionId.getCreatingSystemId().getValue(),
                                 getDataAccess().getServerConfig().getNodename()));
@@ -209,11 +203,11 @@ public class CompositionServiceImp extends BaseServiceImp implements Composition
                             .getContext()
                             .fetchExists(COMPOSITION_HISTORY, COMPOSITION_HISTORY.ID.eq(versionedObjectId))) {
 
-                throw new PreconditionFailedException("Provided Id %s already exists".formatted(composition.getUid()));
+                throw new PreconditionFailedException(CompositionServiceImp.class, "Provided Id %s already exists".formatted(composition.getUid()));
             }
 
         } else if (composition.getUid() != null) {
-            throw new PreconditionFailedException(
+            throw new PreconditionFailedException(CompositionServiceImp.class,
                     "Provided Id %s is not a ObjectVersionId".formatted(composition.getUid()));
         }
 

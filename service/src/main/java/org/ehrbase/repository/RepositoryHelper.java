@@ -50,12 +50,12 @@ public class RepositoryHelper {
 
             if (!execute.result().errors().isEmpty()) {
 
-                throw new InternalServerException(RepostoryHelper.class, execute.result().errors().stream()
+                throw new InternalServerException(RepositoryHelper.class, execute.result().errors().stream()
                         .map(e -> e.exception().getMessage())
                         .collect(Collectors.joining(";")));
             }
         } catch (IOException e) {
-            throw new InternalServerException(RepostoryHelper.class, IO_EXCEPTION);
+            throw new InternalServerException(RepositoryHelper.class, IO_EXCEPTION);
         }
     }
 }
