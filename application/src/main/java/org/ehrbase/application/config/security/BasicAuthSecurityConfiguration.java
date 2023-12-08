@@ -83,7 +83,7 @@ public class BasicAuthSecurityConfiguration extends WebSecurityConfigurerAdapter
                 .authorizeRequests()
                 .requestMatchers(EndpointRequest.to(ShutdownEndpoint.class)).hasRole(ADMIN)
                 .requestMatchers(EndpointRequest.toAnyEndpoint()).permitAll()
-                .antMatchers("/rest/admin/**")
+                .antMatchers("/rest/admin/**", "/management/**")
                 .hasRole(ADMIN)
                 .anyRequest()
                 .hasAnyRole(ADMIN, USER)
