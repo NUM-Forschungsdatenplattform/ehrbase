@@ -53,13 +53,13 @@ public class PersistedPartyProxy {
         this.domainAccess = domainAccess;
     }
 
-    public UUID create(PartyProxy partyProxy, String tenantIdentifier) {
+    public UUID create(PartyProxy partyProxy, Short sysTenant) {
         if (PartyUtils.isPartySelf(partyProxy)) {
-            return new PersistedPartySelf(domainAccess).store(partyProxy, tenantIdentifier);
+            return new PersistedPartySelf(domainAccess).store(partyProxy, sysTenant);
         } else if (PartyUtils.isPartyRelated(partyProxy)) {
-            return new PersistedPartyRelated(domainAccess).store(partyProxy, tenantIdentifier);
+            return new PersistedPartyRelated(domainAccess).store(partyProxy, sysTenant);
         } else if (PartyUtils.isPartyIdentified(partyProxy)) {
-            return new PersistedPartyIdentified(domainAccess).store(partyProxy, tenantIdentifier);
+            return new PersistedPartyIdentified(domainAccess).store(partyProxy, sysTenant);
         } else {
             throw new InternalServerException(PersistedPartyProxy.class, UNHANDLED_PARTY_TYPE_DETECTED,
                     String.format(UNHANDLED_PARTY_TYPE_DETECTED, partyProxy.getClass().getSimpleName()));
@@ -113,13 +113,13 @@ public class PersistedPartyProxy {
         return proxy.hasNext() ? proxy.next() : null;
     }
 
-    public UUID getOrCreate(PartyProxy partyProxy, String tenantIdentifier) {
+    public UUID getOrCreate(PartyProxy partyProxy, Short sysTenant) {
         if (PartyUtils.isPartySelf(partyProxy)) {
-            return new PersistedPartySelf(domainAccess).getOrCreate(partyProxy, tenantIdentifier);
+            return new PersistedPartySelf(domainAccess).getOrCreate(partyProxy, sysTenant);
         } else if (PartyUtils.isPartyRelated(partyProxy)) {
-            return new PersistedPartyRelated(domainAccess).getOrCreate(partyProxy, tenantIdentifier);
+            return new PersistedPartyRelated(domainAccess).getOrCreate(partyProxy, sysTenant);
         } else if (PartyUtils.isPartyIdentified(partyProxy)) {
-            return new PersistedPartyIdentified(domainAccess).getOrCreate(partyProxy, tenantIdentifier);
+            return new PersistedPartyIdentified(domainAccess).getOrCreate(partyProxy, sysTenant);
         } else {
             throw new InternalServerException(PersistedPartyProxy.class, UNHANDLED_PARTY_TYPE_DETECTED,
                     String.format(UNHANDLED_PARTY_TYPE_DETECTED, partyProxy.getClass().getSimpleName()));
@@ -136,7 +136,7 @@ public class PersistedPartyProxy {
             String namespace,
             String type,
             List<DvIdentifier> identifiers,
-            String tenantIdentifier) {
+            Short sysTenant) {
         // Check conformance to openEHR spec
         if (identifiers == null || identifiers.isEmpty()) {
             throw new IllegalArgumentException("Can't create PartyIdentified with invalid list of identifiers.");
@@ -148,7 +148,7 @@ public class PersistedPartyProxy {
         // Create and persist object
         var partyIdentified =
                 new PartyIdentified(new PartyRef(new GenericId(code, scheme), namespace, type), name, identifiers);
-        return getOrCreate(partyIdentified, tenantIdentifier);
+        return getOrCreate(partyIdentified, sysTenant);
     }
 
     /**

@@ -184,11 +184,11 @@ public class ContributionServiceImp extends BaseServiceImp implements Contributi
                     String.format(NO_EHR_FOUND_WITH_GIVEN_ID, ehrId.toString()));
         }
 
-        String tenantIdentifier = tenantService.getCurrentTenantIdentifier();
+        Short sysTenant = tenantService.getCurrentSysTenant();
 
         // create new empty/standard-value contribution - will be updated later with full details
         I_ContributionAccess contributionAccess =
-                I_ContributionAccess.getInstance(this.getDataAccess(), ehrId, tenantIdentifier);
+                I_ContributionAccess.getInstance(this.getDataAccess(), ehrId, sysTenant);
         // parse and set audit information from input
         AuditDetails audit = ContributionServiceHelper.parseAuditDetails(content, format);
         contributionAccess.setAuditDetailsValues(audit);
@@ -271,10 +271,12 @@ public class ContributionServiceImp extends BaseServiceImp implements Contributi
 
         checkContributionRules(version, changeType); // evaluate and check contribution rules
 
+        UUID audit = contributionRepository.createAudit(version.getCommitAudit());
+
         switch (changeType) {
             case CREATION:
                 // call creation of a new composition with given input
-                compositionService.create(ehrId, versionRmObject, contributionId);
+                compositionService.create(ehrId, versionRmObject, contributionId, audit);
                 break;
             case AMENDMENT: // triggers the same processing as modification // TODO-396: so far so good, but should use
                 // the type
@@ -282,13 +284,14 @@ public class ContributionServiceImp extends BaseServiceImp implements Contributi
             case MODIFICATION:
                 String actualPreceding = getAndCheckActualPreceding(version);
                 // call modification of the given composition
-                compositionService.update(ehrId, new ObjectVersionId(actualPreceding), versionRmObject, contributionId);
+                compositionService.update(
+                        ehrId, new ObjectVersionId(actualPreceding), versionRmObject, contributionId, audit);
                 break;
             case DELETED: // case of deletion change type, but request also has payload (TODO: should that be even
                 // allowed?
                 // specification-wise it's not forbidden)
                 String actualPreceding2 = getAndCheckActualPreceding(version);
-                compositionService.delete(ehrId, new ObjectVersionId(actualPreceding2), contributionId);
+                compositionService.delete(ehrId, new ObjectVersionId(actualPreceding2), contributionId, audit);
                 break;
             case SYNTHESIS: // TODO
             case UNKNOWN: // TODO
@@ -325,6 +328,7 @@ public class ContributionServiceImp extends BaseServiceImp implements Contributi
                 version.getCommitAudit().getChangeType().getValue().toUpperCase());
 
         checkContributionRules(version, changeType); // evaluate and check contribution rules
+        UUID audit = contributionRepository.createAudit(version.getCommitAudit());
 
         switch (changeType) {
             case CREATION:
@@ -341,7 +345,7 @@ public class ContributionServiceImp extends BaseServiceImp implements Contributi
                     throw new PreconditionFailedException(ContributionServiceImp.class, GIVEN_PRECEDING_VERSION_UID_FOR_EHR_STATUS_OBJECT_DOES_NOT_MATCH_LATEST_EXISTING_VERSION);
                 }
                 // call modification of the given status
-                ehrService.updateStatus(ehrId, versionRmObject, contributionId);
+                ehrService.updateStatus(ehrId, versionRmObject, contributionId, audit);
                 break;
             case DELETED:
                 // deleting a STATUS versioned object is invalid
@@ -440,6 +444,9 @@ public class ContributionServiceImp extends BaseServiceImp implements Contributi
         // access audit and extract method, e.g. CREATION
         I_ConceptAccess.ContributionChangeType changeType = I_ConceptAccess.ContributionChangeType.valueOf(
                 version.getCommitAudit().getChangeType().getValue().toUpperCase());
+
+        UUID audit = contributionRepository.createAudit(version.getCommitAudit());
+
         switch (changeType) {
             case DELETED:
                 // deleting an object without knowing which type it is requires checking of type, here with nested
@@ -452,7 +459,7 @@ public class ContributionServiceImp extends BaseServiceImp implements Contributi
                         throw new RuntimeException();
                     }
                     String actualPreceding = getAndCheckActualPreceding(version);
-                    compositionService.delete(ehrId, new ObjectVersionId(actualPreceding), contributionId);
+                    compositionService.delete(ehrId, new ObjectVersionId(actualPreceding), contributionId, audit);
                 } catch (Exception e) {
                     // given version ID is not of type composition - ignoring the exception because it is
                     // expected possible outcome
@@ -556,10 +563,10 @@ public class ContributionServiceImp extends BaseServiceImp implements Contributi
         UUID auditId = I_ContributionAccess.retrieveInstance(this.getDataAccess(), contributionId)
                 .getHasAuditDetails();
 
-        String tenantIdentifier = tenantService.getCurrentTenantIdentifier();
+        Short sysTenant = tenantService.getCurrentSysTenant();
 
-        I_AuditDetailsAccess auditDetailsAccess = new AuditDetailsAccess(this.getDataAccess(), tenantIdentifier)
-                .retrieveInstance(this.getDataAccess(), auditId);
+        I_AuditDetailsAccess auditDetailsAccess =
+                new AuditDetailsAccess(this.getDataAccess(), sysTenant).retrieveInstance(this.getDataAccess(), auditId);
 
         String systemId = auditDetailsAccess.getSystemId().toString();
         PartyProxy committer =

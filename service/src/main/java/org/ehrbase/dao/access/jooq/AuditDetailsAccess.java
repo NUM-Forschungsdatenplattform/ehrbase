@@ -33,8 +33,8 @@ import com.nedap.archie.rm.support.identification.TerminologyId;
 import java.sql.Timestamp;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.Objects;
 import java.util.UUID;
-import org.apache.commons.lang3.StringUtils;
 import org.ehrbase.api.exception.InternalServerException;
 import org.ehrbase.dao.access.interfaces.I_AuditDetailsAccess;
 import org.ehrbase.dao.access.interfaces.I_ConceptAccess;
@@ -49,10 +49,10 @@ public class AuditDetailsAccess extends DataAccess implements I_AuditDetailsAcce
 
     private AuditDetailsRecord auditDetailsRecord;
 
-    public AuditDetailsAccess(I_DomainAccess dataAccess, String tenantIdentifier) {
+    public AuditDetailsAccess(I_DomainAccess dataAccess, Short sysTenant) {
         super(dataAccess);
         this.auditDetailsRecord = dataAccess.getContext().newRecord(AUDIT_DETAILS);
-        this.auditDetailsRecord.setNamespace(tenantIdentifier);
+        this.auditDetailsRecord.setSysTenant(sysTenant);
     }
 
     public AuditDetailsAccess(
@@ -61,23 +61,23 @@ public class AuditDetailsAccess extends DataAccess implements I_AuditDetailsAcce
             UUID committer,
             I_ConceptAccess.ContributionChangeType changeType,
             String description,
-            String tenantIdentifier) {
-        this(dataAccess, tenantIdentifier);
+            Short sysTenant) {
+        this(dataAccess, sysTenant);
         auditDetailsRecord.setSystemId(systemId);
         auditDetailsRecord.setCommitter(committer);
         setChangeType(I_ConceptAccess.fetchContributionChangeType(this, changeType));
         auditDetailsRecord.setDescription(description);
-        auditDetailsRecord.setNamespace(tenantIdentifier);
+        auditDetailsRecord.setSysTenant(sysTenant);
     }
 
     @Override
     public I_AuditDetailsAccess retrieveInstance(I_DomainAccess dataAccess, UUID auditId) {
-        AuditDetailsAccess auditDetailsAccess = new AuditDetailsAccess(dataAccess, auditDetailsRecord.getNamespace());
+        AuditDetailsAccess auditDetailsAccess = new AuditDetailsAccess(dataAccess, auditDetailsRecord.getSysTenant());
 
         try {
             auditDetailsAccess.auditDetailsRecord =
                     dataAccess.getContext().fetchOne(AUDIT_DETAILS, AUDIT_DETAILS.ID.eq(auditId));
-            if (!auditDetailsAccess.auditDetailsRecord.getNamespace().equals(this.auditDetailsRecord.getNamespace()))
+            if (!auditDetailsAccess.auditDetailsRecord.getSysTenant().equals(this.auditDetailsRecord.getSysTenant()))
                 throw new InternalServerException(AuditDetailsAccess.class, TENANT_ID_MISMATCH_CALLING_FOR_ID);
         } catch (Exception e) {
             throw new InternalServerException(AttestationAccess.class, FETCHING_AUDIT_DETAILS_FAILED);
@@ -243,8 +243,8 @@ public class AuditDetailsAccess extends DataAccess implements I_AuditDetailsAcce
 
     @Override
     public void setRecord(AuditDetailsRecord record) {
-        if (StringUtils.isEmpty(record.getNamespace())) record.setNamespace(this.auditDetailsRecord.getNamespace());
-        if (!this.auditDetailsRecord.getNamespace().equals(record.getNamespace()))
+        if (Objects.isNull(record.getSysTenant())) record.setSysTenant(this.auditDetailsRecord.getSysTenant());
+        if (!this.auditDetailsRecord.getSysTenant().equals(record.getSysTenant()))
             throw new InternalServerException(AuditDetailsAccess.class, TENANT_ID_MISMATCH);
         this.auditDetailsRecord = record;
     }
@@ -269,7 +269,7 @@ public class AuditDetailsAccess extends DataAccess implements I_AuditDetailsAcce
     }
 
     @Override
-    public String getNamespace() {
-        return auditDetailsRecord.getNamespace();
+    public Short getSysTenant() {
+        return auditDetailsRecord.getSysTenant();
     }
 }

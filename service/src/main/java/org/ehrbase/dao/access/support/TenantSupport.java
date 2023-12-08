@@ -17,18 +17,9 @@
  */
 package org.ehrbase.dao.access.support;
 
-import java.util.Objects;
 import java.util.Optional;
-import java.util.function.Supplier;
-import org.apache.commons.lang3.StringUtils;
-import org.ehrbase.api.exception.InternalServerException;
-import org.ehrbase.api.tenant.TenantAuthentication;
-import org.ehrbase.functional.Try;
-import org.ehrbase.tenant.DefaultTenantAuthentication;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.security.core.context.SecurityContext;
-import org.springframework.security.core.context.SecurityContextHolder;
+import org.ehrbase.api.service.TenantService;
+import org.ehrbase.service.ApplicationContextProvider;
 
 import static org.ehrbase.api.exception.ExceptionsTemplate.PROVIDED_TENANT_ID_DOES_NOT_MATCH_SESSION;
 
@@ -38,32 +29,10 @@ public final class TenantSupport {
         // NOP
     }
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(TenantSupport.class);
-
-    private static final String WARN_NOT_TENEANT_IDENT =
-            "No tenent identifier provided, falling back to default tenant identifier {}";
-
-    public static String currentTenantIdentifier() {
-        return Optional.ofNullable(SecurityContextHolder.getContext())
-                .map(SecurityContext::getAuthentication)
-                .filter(Objects::nonNull)
-                .filter(DefaultTenantAuthentication.class::isInstance)
-                .map(DefaultTenantAuthentication.class::cast)
-                .map(DefaultTenantAuthentication::getTenantId)
-                .filter(StringUtils::isNotEmpty)
-                .orElseGet(() -> {
-                    LOGGER.warn(WARN_NOT_TENEANT_IDENT, TenantAuthentication.getDefaultTenantId());
-                    return TenantAuthentication.getDefaultTenantId();
-                });
-    }
-
-    public static Try<String, InternalServerException> isValidTenantId(
-            String tenantId, Supplier<String> currentTenant) {
-        String currentTenantIdentifier = currentTenant.get();
-
-        return currentTenantIdentifier.equals(tenantId)
-                ? Try.success(tenantId)
-                : Try.failure(new InternalServerException(TenantSupport.class, PROVIDED_TENANT_ID_DOES_NOT_MATCH_SESSION,
-                        String.format(PROVIDED_TENANT_ID_DOES_NOT_MATCH_SESSION, tenantId, currentTenantIdentifier)));
+     public static Short currentSysTenant() {
+        return Optional.ofNullable(ApplicationContextProvider.getApplicationContext())
+                .map(applicationContext -> applicationContext.getBean(TenantService.class))
+                .map(TenantService::getCurrentSysTenant)
+                .orElseThrow(() -> new IllegalArgumentException("Could not retrieve tenant"));
     }
 }
