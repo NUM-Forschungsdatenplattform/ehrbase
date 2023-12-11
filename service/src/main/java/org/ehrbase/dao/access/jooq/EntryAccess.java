@@ -107,13 +107,13 @@ public class EntryAccess extends DataAccess implements I_EntryAccess {
             Integer sequence,
             UUID compositionId,
             Composition composition,
-            String tenantIdentifier) {
+            Short sysTenant) {
         super(
                 domainAccess.getContext(),
                 domainAccess.getKnowledgeManager(),
                 domainAccess.getIntrospectService(),
                 domainAccess.getServerConfig());
-        setFields(templateId, sequence, compositionId, composition, tenantIdentifier);
+        setFields(templateId, sequence, compositionId, composition, sysTenant);
     }
 
     private EntryAccess(I_DomainAccess domainAccess) {
@@ -264,7 +264,7 @@ public class EntryAccess extends DataAccess implements I_EntryAccess {
 
             EntryHistoryRecord entryHistoryRecord = existingEntryHistory.get();
             entryAccess.entryRecord = domainAccess.getContext().newRecord(ENTRY);
-            entryAccess.entryRecord.setNamespace(entryHistoryRecord.getNamespace());
+            entryAccess.entryRecord.setSysTenant(entryHistoryRecord.getSysTenant());
             entryAccess.entryRecord.from(entryHistoryRecord);
             entryAccess.composition =
                     new RawJson().unmarshal(entryHistoryRecord.getEntry().data(), Composition.class);
@@ -390,7 +390,7 @@ public class EntryAccess extends DataAccess implements I_EntryAccess {
      * @param composition   {@link Composition} object with more information for the entry
      */
     private void setFields(
-            String templateId, Integer sequence, UUID compositionId, Composition composition, String tenantIdentifier) {
+            String templateId, Integer sequence, UUID compositionId, Composition composition, Short sysTenant) {
 
         entryRecord = getContext().newRecord(ENTRY);
 
@@ -398,7 +398,7 @@ public class EntryAccess extends DataAccess implements I_EntryAccess {
         entryRecord.setSequence(sequence);
         entryRecord.setCompositionId(compositionId);
         entryRecord.setRmVersion(composition.getArchetypeDetails().getRmVersion());
-        entryRecord.setNamespace(tenantIdentifier);
+        entryRecord.setSysTenant(sysTenant);
         new RecordedDvCodedText().toDB(entryRecord, ENTRY.CATEGORY, composition.getCategory());
         setCompositionFields(entryRecord, composition);
 
@@ -429,7 +429,7 @@ public class EntryAccess extends DataAccess implements I_EntryAccess {
                         ENTRY.SYS_TRANSACTION,
                         ENTRY.NAME,
                         ENTRY.RM_VERSION,
-                        ENTRY.NAMESPACE)
+                        ENTRY.SYS_TENANT)
                 .values(
                         DSL.val(getSequence()),
                         DSL.val(getCompositionId()),
@@ -442,7 +442,7 @@ public class EntryAccess extends DataAccess implements I_EntryAccess {
                         DSL.val(getCompositionName()),
                         DSL.val(getRmVersion()),
                         // we do not expose the namespace
-                        DSL.val(entryRecord.getNamespace()))
+                        DSL.val(entryRecord.getSysTenant()))
                 .returning(ENTRY.ID)
                 .fetchOne();
 

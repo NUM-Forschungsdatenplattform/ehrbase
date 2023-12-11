@@ -4,11 +4,10 @@ DO
 $$
     BEGIN
         IF (EXISTS
-                (SELECT 1
-                 FROM information_schema.tables
-                 WHERE table_schema = 'ehr'
-                   AND table_name = 'flyway_schema_history'
-                ))
+            (SELECT 1
+             FROM information_schema.tables
+             WHERE table_schema = 'ehr'
+               AND table_name = 'flyway_schema_history'))
         THEN
 
             UPDATE ehr.flyway_schema_history
@@ -26,6 +25,11 @@ $$
             UPDATE ehr.flyway_schema_history
             SET checksum = 1953744080
             WHERE (version, checksum) = ('71', -1047639409);
+
+            UPDATE ehr.flyway_schema_history
+            SET checksum = 861164608
+            WHERE (version, checksum) = ('83', -1840801783)
+               OR (version, checksum) = ('83', 1051439940);
 
         END IF;
     END

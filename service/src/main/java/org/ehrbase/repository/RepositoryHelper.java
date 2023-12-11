@@ -31,15 +31,15 @@ import static org.ehrbase.api.exception.ExceptionsTemplate.IO_EXCEPTION;
 /**
  * @author Stefan Spiska
  */
-public class RepostoryHelper {
+public class RepositoryHelper {
 
-    private RepostoryHelper() {
+    private RepositoryHelper() {
 
-        // Helper Calss
+        // Helper Class
 
     }
 
-    static <T extends Record> void executeBulkInsert(DSLContext context, List<T> recordList, Table<?> table) {
+    public static <T extends Record> void executeBulkInsert(DSLContext context, List<T> recordList, Table<?> table) {
 
         try {
             Loader<?> execute = context.loadInto(table)
@@ -50,12 +50,12 @@ public class RepostoryHelper {
 
             if (!execute.result().errors().isEmpty()) {
 
-                throw new InternalServerException(RepostoryHelper.class, execute.result().errors().stream()
+                throw new InternalServerException(RepositoryHelper.class, execute.result().errors().stream()
                         .map(e -> e.exception().getMessage())
                         .collect(Collectors.joining(";")));
             }
         } catch (IOException e) {
-            throw new InternalServerException(RepostoryHelper.class, IO_EXCEPTION);
+            throw new InternalServerException(RepositoryHelper.class, IO_EXCEPTION);
         }
     }
 }

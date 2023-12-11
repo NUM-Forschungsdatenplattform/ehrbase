@@ -17,12 +17,13 @@
  */
 package org.ehrbase.dao.access.jooq;
 
+import static org.apache.commons.lang3.StringUtils.isNotBlank;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
@@ -40,6 +41,7 @@ import org.jooq.Result;
 import static org.ehrbase.api.exception.ExceptionsTemplate.UPDATING_TENANT_ID_IS_NOT_ALLOWED;
 
 public class TenantAccess implements I_TenantAccess {
+
     private final TenantRecord record;
 
     public TenantAccess(DSLContext ctx, Tenant tenant) {
@@ -55,12 +57,12 @@ public class TenantAccess implements I_TenantAccess {
         rec.setTenantId(tenant.getTenantId());
         rec.setTenantName(tenant.getTenantName());
         String json = mapToJson.apply(tenant.getTenantProperties());
-        rec.setTenantProperties(JSON.json(json));
+        rec.setTenantProperties(isNotBlank(json) ? JSON.json(json) : null);
         return rec;
     }
 
     @Override
-    public UUID commit() {
+    public Short commit() {
         record.store();
         return record.getId();
     }
@@ -76,6 +78,11 @@ public class TenantAccess implements I_TenantAccess {
         return Optional.ofNullable(ctx.fetchOne(Tables.TENANT, Tables.TENANT.TENANT_ID.eq(tenantId)))
                 .map(rec -> new TenantAccess(ctx, rec))
                 .orElse(null);
+    }
+
+    public static Map<String, Short> getSysTenants(DSLContext ctx) {
+        return ctx.fetch(Tables.TENANT).stream()
+                .collect(Collectors.toMap(TenantRecord::getTenantId, TenantRecord::getId));
     }
 
     private static Function<Map<String, Object>, String> mapToJson = map -> {
@@ -112,14 +119,16 @@ public class TenantAccess implements I_TenantAccess {
     }
 
 
+    @Override
     public Tenant update(Tenant tenant) {
         if (!record.getTenantId().equals(tenant.getTenantId()))
             new InternalServerException(TenantAccess.class, UPDATING_TENANT_ID_IS_NOT_ALLOWED, String.format(UPDATING_TENANT_ID_IS_NOT_ALLOWED, tenant.getTenantId()));
 
         record.setTenantName(tenant.getTenantName());
         String json = mapToJson.apply(tenant.getTenantProperties());
-        record.setTenantProperties(JSON.json(json));
+        record.setTenantProperties(isNotBlank(json) ? JSON.json(json) : null);
         record.update();
+
         return convert();
     }
 }

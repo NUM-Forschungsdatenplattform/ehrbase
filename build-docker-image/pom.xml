@@ -5,7 +5,7 @@
   <parent>
     <groupId>org.ehrbase.openehr</groupId>
     <artifactId>server</artifactId>
-    <version>0.25.0-SNAPSHOT</version>
+    <version>0.28.0-SNAPSHOT</version>
   </parent>
 
   <artifactId>build-docker-image</artifactId>
@@ -47,7 +47,7 @@
 
   <properties>
     <docker-image-from>openjdk:17.0.2-jdk-oracle</docker-image-from>
-    <docker-maven-plugin.version>0.42.0</docker-maven-plugin.version>
+    <docker-maven-plugin.version>0.43.0</docker-maven-plugin.version>
     <docker-image-name>numresearchdataplatform/num-ehrbase</docker-image-name>
   </properties>
 

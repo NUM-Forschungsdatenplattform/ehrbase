@@ -101,7 +101,6 @@ public class EhrBasePluginManager extends SpringPluginManager implements EhrBase
                 .map(PROPERTY_SOURCE_LOADER_MAP::get)
                 .map(p -> {
                     try {
-
                         return p.load(fileName, new FileSystemResource(totalPath));
                     } catch (IOException e) {
                         throw new InternalServerException(EhrBasePluginManager.class, IO_EXCEPTION);
