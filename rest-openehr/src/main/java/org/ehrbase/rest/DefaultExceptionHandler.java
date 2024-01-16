@@ -26,14 +26,14 @@ import org.ehrbase.api.exception.ObjectNotFoundException;
 import org.ehrbase.api.exception.StateConflictException;
 import org.ehrbase.api.exception.UnsupportedMediaTypeException;
 import org.ehrbase.api.exception.ValidationException;
-import org.ehrbase.serialisation.exception.UnmarshalException;
+import org.ehrbase.openehr.sdk.serialisation.exception.UnmarshalException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.BindException;
 import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
@@ -75,11 +75,6 @@ public class DefaultExceptionHandler {
         return handleExceptionInternal(ex, ex.getMessage(), new HttpHeaders(), HttpStatus.BAD_REQUEST);
     }
 
-    @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<Object> handleObjectNotFoundException(AccessDeniedException ex) {
-        return handleExceptionInternal(ex, ex.getMessage(), new HttpHeaders(), HttpStatus.FORBIDDEN);
-    }
-
     // 404
     @ExceptionHandler(ObjectNotFoundException.class)
     public ResponseEntity<Object> handleObjectNotFoundException(ObjectNotFoundException ex) {
@@ -108,7 +103,7 @@ public class DefaultExceptionHandler {
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<Object> handleSpringResponseStatusException(ResponseStatusException ex) {
         // rethrow will not work properly, so we handle it
-        return handleExceptionInternal(ex, ex.getReason(), ex.getResponseHeaders(), ex.getStatus());
+        return handleExceptionInternal(ex, ex.getReason(), ex.getResponseHeaders(), ex.getStatusCode());
     }
 
     // 500 - general
@@ -119,7 +114,7 @@ public class DefaultExceptionHandler {
     }
 
     private ResponseEntity<Object> handleExceptionInternal(
-            Exception ex, String message, HttpHeaders headers, HttpStatus status) {
+            Exception ex, String message, HttpHeaders headers, HttpStatusCode status) {
 
         if (status.is5xxServerError()) {
             logger.error("", ex);
@@ -131,7 +126,9 @@ public class DefaultExceptionHandler {
         }
 
         Map<String, Object> body = new HashMap<>();
-        body.put("error", status.getReasonPhrase());
+        if (status instanceof HttpStatus httpStatus) {
+            body.put("error", httpStatus.getReasonPhrase());
+        }
         body.put("message", message);
         return new ResponseEntity<>(body, headers, status);
     }

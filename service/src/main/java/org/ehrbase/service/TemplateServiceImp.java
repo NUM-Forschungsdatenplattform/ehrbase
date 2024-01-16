@@ -38,18 +38,18 @@ import org.ehrbase.api.exception.ObjectNotFoundExceptionType;
 import org.ehrbase.api.service.CompositionService;
 import org.ehrbase.api.service.TemplateService;
 import org.ehrbase.api.service.TenantService;
-import org.ehrbase.building.webtemplateskeletnbuilder.WebTemplateSkeletonBuilder;
-import org.ehrbase.client.classgenerator.shareddefinition.Language;
-import org.ehrbase.client.classgenerator.shareddefinition.Setting;
-import org.ehrbase.client.classgenerator.shareddefinition.Territory;
 import org.ehrbase.ehr.knowledge.TemplateMetaData;
 import org.ehrbase.openehr.sdk.examplegenerator.ExampleGeneratorConfig;
 import org.ehrbase.openehr.sdk.examplegenerator.ExampleGeneratorToCompositionWalker;
-import org.ehrbase.response.ehrscape.TemplateMetaDataDto;
-import org.ehrbase.serialisation.walker.FlatHelper;
-import org.ehrbase.serialisation.walker.defaultvalues.DefaultValuePath;
-import org.ehrbase.serialisation.walker.defaultvalues.DefaultValues;
-import org.ehrbase.webtemplate.model.WebTemplate;
+import org.ehrbase.openehr.sdk.generator.commons.shareddefinition.Language;
+import org.ehrbase.openehr.sdk.generator.commons.shareddefinition.Setting;
+import org.ehrbase.openehr.sdk.generator.commons.shareddefinition.Territory;
+import org.ehrbase.openehr.sdk.response.dto.ehrscape.TemplateMetaDataDto;
+import org.ehrbase.openehr.sdk.serialisation.walker.FlatHelper;
+import org.ehrbase.openehr.sdk.serialisation.walker.defaultvalues.DefaultValuePath;
+import org.ehrbase.openehr.sdk.serialisation.walker.defaultvalues.DefaultValues;
+import org.ehrbase.openehr.sdk.webtemplate.model.WebTemplate;
+import org.ehrbase.openehr.sdk.webtemplate.webtemplateskeletonbuilder.WebTemplateSkeletonBuilder;
 import org.jooq.DSLContext;
 import org.openehr.schemas.v1.CARCHETYPEROOT;
 import org.openehr.schemas.v1.OBJECTID;
@@ -142,7 +142,7 @@ public class TemplateServiceImp extends BaseServiceImp implements TemplateServic
     public WebTemplate findTemplate(String templateId) {
         try {
             return knowledgeCacheService.getQueryOptMetaData(templateId);
-        } catch (NullPointerException e) {
+        } catch (NullPointerException | IllegalArgumentException e) {
             throw new ObjectNotFoundException(ObjectNotFoundExceptionType.TEMPLATE.getType(),
                     TemplateServiceImp.class, TEMPLATE_WITH_THE_SPECIFIED_ID_DOES_NOT_EXIST);
         } catch (Exception e) {
