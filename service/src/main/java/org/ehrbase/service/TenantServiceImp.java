@@ -27,6 +27,7 @@ import javax.annotation.PostConstruct;
 import org.apache.commons.lang3.StringUtils;
 import org.ehrbase.api.definitions.ServerConfig;
 import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.api.exception.ObjectNotFoundExceptionType;
 import org.ehrbase.api.service.TenantService;
 import org.ehrbase.api.tenant.Tenant;
 import org.ehrbase.api.tenant.TenantAuthentication;
@@ -126,7 +127,8 @@ public class TenantServiceImp extends BaseServiceImp implements TenantService {
         }
 
         if (!hasTenant(tenantId)) {
-            throw new ObjectNotFoundException("Tenant", String.format("Tenant with id %s does not exist.", tenantId));
+            throw new ObjectNotFoundException(ObjectNotFoundExceptionType.TENANT.getType(), TenantServiceImp.class,
+                    String.format("Tenant with id %s does not exist.", tenantId));
         }
 
         I_TenantAccess.deleteTenant(getDataAccess().getContext(), tenantId);

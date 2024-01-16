@@ -2,10 +2,7 @@ package org.ehrbase.rest;
 
 import java.util.Objects;
 
-import javax.validation.constraints.NotNull;
-
-import org.ehrbase.api.authorization.EhrbaseAuthorization;
-import org.ehrbase.api.authorization.EhrbasePermission;
+import jakarta.validation.constraints.NotNull;
 import org.ehrbase.api.service.ManagementService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -41,7 +38,6 @@ public class ManagementController extends BaseController {
         this.managementService = Objects.requireNonNull(managementService);
     }
 
-    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_SYSTEM_STATUS)
     @GetMapping(path = "/log-level")
     @Operation(summary = "Get log level information on running EHRbase server instance")
     @ApiResponses(
@@ -64,7 +60,6 @@ public class ManagementController extends BaseController {
         return ResponseEntity.ok(managementService.getLogLevel());
     }
 
-    @EhrbaseAuthorization(permission = EhrbasePermission.EHRBASE_SYSTEM_STATUS)
     @PostMapping(path = "/log-level/{logLevel}")
     @Operation(summary = "Get log level information on running EHRbase server instance")
     @ApiResponses(

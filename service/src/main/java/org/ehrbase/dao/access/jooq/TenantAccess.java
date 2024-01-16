@@ -141,7 +141,7 @@ public class TenantAccess implements I_TenantAccess {
                 Routines.adminDeleteTenantFull(ctx.configuration(), getSysTenant(ctx, tenantId));
 
         if (result.isEmpty() || !Boolean.TRUE.equals(result.get(0).getDeleted())) {
-            throw new InternalServerException("Deletion of tenant failed!");
+            throw new InternalServerException(TenantAccess.class, "Deletion of tenant failed!");
         }
     }
 
@@ -149,7 +149,7 @@ public class TenantAccess implements I_TenantAccess {
         TenantRecord tenantRecord = ctx.fetchOne(TENANT, TENANT.TENANT_ID.eq(tenantId));
         return Optional.ofNullable(tenantRecord)
                 .map(TenantRecord::getId)
-                .orElseThrow(() -> new InternalServerException("Tenant System ID cannot be empty/null"));
+                .orElseThrow(() -> new InternalServerException(TenantAccess.class, "Tenant System ID cannot be empty/null"));
     }
 
     public static boolean hasTenant(I_DomainAccess domainAccess, String tenantId) {

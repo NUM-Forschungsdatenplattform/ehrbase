@@ -24,6 +24,7 @@ import javax.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.actuate.autoconfigure.security.servlet.EndpointRequest;
 import org.springframework.boot.actuate.context.ShutdownEndpoint;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -81,9 +82,9 @@ public class BasicAuthSecurityConfiguration {
                 .authorizeHttpRequests(auth -> auth.requestMatchers(
                                 AntPathRequestMatcher.antMatcher("/rest/admin/**"),
                                 AntPathRequestMatcher.antMatcher("/management/**"))
+                .hasRole(ADMIN)
                 .requestMatchers(EndpointRequest.to(ShutdownEndpoint.class)).hasRole(ADMIN)
                 .requestMatchers(EndpointRequest.toAnyEndpoint()).permitAll()
-                        .hasRole(ADMIN)
                         .anyRequest()
                         .hasAnyRole(ADMIN, SecurityProperties.USER))
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
