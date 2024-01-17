@@ -35,10 +35,10 @@ jobs:
         run: |
           if [ ${{ github.ref }} != 'refs/heads/num-main' ]; then
             echo "IS NOT num-main branch"
-            echo "BUILD_VERSION=0.28.x-num-$GITHUB_RUN_NUMBER-PR" >> $GITHUB_ENV
+            echo "BUILD_VERSION=0.32.x-num-$GITHUB_RUN_NUMBER-PR" >> $GITHUB_ENV
           else
             echo "IS main branch"
-            echo "BUILD_VERSION=0.28.x-num-$GITHUB_RUN_NUMBER" >> $GITHUB_ENV
+            echo "BUILD_VERSION=0.32.x-num-$GITHUB_RUN_NUMBER" >> $GITHUB_ENV
           fi
         shell: bash
 
