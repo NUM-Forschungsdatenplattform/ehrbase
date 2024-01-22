@@ -5,7 +5,7 @@
   <parent>
     <groupId>org.ehrbase.openehr</groupId>
     <artifactId>server</artifactId>
-    <version>0.28.0-SNAPSHOT</version>
+    <version>0.32.0-SNAPSHOT</version>
   </parent>
 
   <artifactId>build-docker-image</artifactId>
@@ -72,6 +72,10 @@
                   <alias>redis</alias>
                   <name>redis:latest</name>
                   <run>
+                    <env>
+                      <REDIS_PORT>6379</REDIS_PORT>
+                      <REDIS_HOST>redis</REDIS_HOST>
+                    </env>
                     <ports>
                       <port>6379:6379</port>
                     </ports>
@@ -159,8 +163,8 @@
                       <SPRING_DATASOURCE_PASSWORD>ehrbase_restricted</SPRING_DATASOURCE_PASSWORD>
                       <SPRING_FLYWAY_USER>ehrbase</SPRING_FLYWAY_USER>
                       <SPRING_FLYWAY_PASSWORD>ehrbase</SPRING_FLYWAY_PASSWORD>
-                      <SPRING_REDIS_HOST>redis</SPRING_REDIS_HOST>
-                      <SECURITY_AUTHTYPE>BASIC</SECURITY_AUTHTYPE>
+                      <SPRING_DATA_REDIS_HOST>redis</SPRING_DATA_REDIS_HOST>
+                      <SECURITY_AUTHTYPE>NONE</SECURITY_AUTHTYPE>
                       <MANAGEMENT_SERVER_PORT>7979</MANAGEMENT_SERVER_PORT>
                       <MANAGEMENT_ENDPOINTS_WEB_EXPOSURE>env,health,info,metrics,prometheus</MANAGEMENT_ENDPOINTS_WEB_EXPOSURE>"
                       <MANAGEMENT_ENDPOINTS_WEB_BASEPATH>/management</MANAGEMENT_ENDPOINTS_WEB_BASEPATH>
