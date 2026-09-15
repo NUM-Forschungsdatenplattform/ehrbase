@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022 vitasystems GmbH and Hannover Medical School.
+ * Copyright (c) 2024 vitasystems GmbH.
  *
  * This file is part of project EHRbase
  *
@@ -7,7 +7,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,36 +17,35 @@
  */
 package org.ehrbase.rest.openehr;
 
-import static org.apache.commons.lang3.StringUtils.unwrap;
+import static org.ehrbase.api.rest.HttpRestContext.DIRECTORY_ID;
+import static org.ehrbase.api.rest.HttpRestContext.EHR_ID;
 import static org.springframework.web.util.UriComponentsBuilder.fromPath;
 
 import com.nedap.archie.rm.changecontrol.OriginalVersion;
+import com.nedap.archie.rm.datavalues.quantity.datetime.DvDateTime;
 import com.nedap.archie.rm.ehr.EhrStatus;
+import com.nedap.archie.rm.support.identification.ObjectVersionId;
+import com.nedap.archie.rm.support.identification.UIDBasedId;
 import java.net.URI;
-import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.temporal.TemporalAccessor;
+import java.time.temporal.TemporalQueries;
 import java.util.UUID;
-import java.util.function.Supplier;
-import org.ehrbase.api.annotations.TenantAware;
-import org.ehrbase.api.audit.msg.AuditMsgBuilder;
-import org.ehrbase.api.exception.InternalServerException;
 import org.ehrbase.api.exception.InvalidApiParameterException;
 import org.ehrbase.api.exception.ObjectNotFoundException;
-import org.ehrbase.api.exception.PreconditionFailedException;
+import org.ehrbase.api.rest.HttpRestContext;
 import org.ehrbase.api.service.EhrService;
-import org.ehrbase.openehr.sdk.response.dto.EhrStatusResponseData;
+import org.ehrbase.api.util.LocatableUtils;
 import org.ehrbase.rest.BaseController;
 import org.ehrbase.rest.openehr.specification.EhrStatusApiSpecification;
-import org.ehrbase.rest.util.InternalResponse;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -58,13 +57,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Controller for /ehr/{ehrId}/ehr_status resource of openEHR REST API
- *
- * @author Jake Smolka
- * @author Renaud Subiger
- * @since 1.0
  */
 @ConditionalOnMissingBean(name = "primaryopenehrehrstatuscontroller")
-@TenantAware
 @RestController
 @RequestMapping(path = BaseController.API_CONTEXT_PATH_WITH_VERSION + "/ehr/{ehr_id}/ehr_status")
 public class OpenehrEhrStatusController extends BaseController implements EhrStatusApiSpecification {
@@ -75,221 +69,118 @@ public class OpenehrEhrStatusController extends BaseController implements EhrSta
         this.ehrService = ehrService;
     }
 
-    /**
-     * {@inheritDoc}
-     */
     @Override
-    @GetMapping
-    @PreAuthorize("checkAbacPre(@openehrEhrStatusController.EHR_STATUS, @ehrService.getSubjectExtRef(#ehrId))")
-    public ResponseEntity<EhrStatusResponseData> getEhrStatusVersionByTime(
+    @GetMapping(produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.APPLICATION_XML_VALUE})
+    public ResponseEntity<EhrStatus> getEhrStatusVersionByTime(
             @PathVariable(name = "ehr_id") UUID ehrId,
-            @RequestParam(name = "version_at_time", required = false) String versionAtTime,
-            @RequestHeader(name = HttpHeaders.ACCEPT, required = false) String accept) {
+            @RequestParam(name = "version_at_time", required = false) String versionAtTime) {
 
-        assertEhrExists(ehrId);
+        final ObjectVersionId objectVersionId;
 
-        // timestamp optional, otherwise latest
-        int version;
         if (versionAtTime != null) {
-            OffsetDateTime time = OffsetDateTime.parse(versionAtTime);
-            Timestamp timestamp = Timestamp.valueOf(time.toLocalDateTime());
-            version = ehrService.getEhrStatusVersionByTimestamp(ehrId, timestamp);
+            OffsetDateTime time = decodeVersionAtTime(versionAtTime).orElseThrow();
+            objectVersionId = ehrService.getEhrStatusVersionByTimestamp(ehrId, time);
         } else {
-            version = Integer.parseInt(
-                    ehrService.getLatestVersionUidOfStatus(ehrId).split("::")[2]);
+            objectVersionId = ehrService.getLatestVersionUidOfStatus(ehrId);
         }
 
-        UUID statusUid = ehrService.getEhrStatusVersionedObjectUidByEhr(ehrId);
+        UUID ehrStatusId = extractVersionedObjectUidFromVersionUid(objectVersionId.getValue());
+        int version = extractVersionFromVersionUid(objectVersionId.getValue()).orElseThrow();
 
-        return internalGetEhrStatusProcessing(accept, ehrId, statusUid, version);
+        OriginalVersion<EhrStatus> originalVersion = ehrStatusVersion(ehrId, ehrStatusId, version);
+        return responseBuilder(HttpStatus.OK, ehrId, originalVersion).body(originalVersion.getData());
     }
 
-    /**
-     * {@inheritDoc}
-     */
     @Override
-    @GetMapping(path = "/{version_uid}")
-    @PreAuthorize("checkAbacPre(@openehrEhrStatusController.EHR_STATUS, @ehrService.getSubjectExtRef(#ehrId))")
-    public ResponseEntity<EhrStatusResponseData> getEhrStatusByVersionId(
-            @PathVariable(name = "ehr_id") UUID ehrId,
-            @PathVariable(name = "version_uid") String versionUid,
-            @RequestHeader(name = HttpHeaders.ACCEPT, required = false) String accept) {
+    @GetMapping(
+            path = "/{version_uid}",
+            produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.APPLICATION_XML_VALUE})
+    public ResponseEntity<EhrStatus> getEhrStatusByVersionId(
+            @PathVariable(name = "ehr_id") UUID ehrId, @PathVariable(name = "version_uid") String versionUid) {
 
-        assertEhrExists(ehrId);
+        UUID ehrStatusId = extractVersionedObjectUidFromVersionUid(versionUid);
+        int version = extractVersionFromVersionUid(versionUid)
+                .orElseThrow(
+                        () -> new InvalidApiParameterException("VERSION UID parameter does not contain a version"));
 
-        UUID versionedObjectUid = extractVersionedObjectUidFromVersionUid(versionUid);
-        int version = extractVersionFromVersionUid(versionUid);
-
-        Optional<OriginalVersion<EhrStatus>> ehrStatus =
-                ehrService.getEhrStatusAtVersion(ehrId, versionedObjectUid, version);
-
-        UUID ehrStatusId = extractVersionedObjectUidFromVersionUid(ehrStatus
-                .orElseThrow(() -> new ObjectNotFoundException("ehr_status", "EHR_STATUS not found"))
-                .getUid()
-                .toString());
-
-        return internalGetEhrStatusProcessing(accept, ehrId, ehrStatusId, version);
+        OriginalVersion<EhrStatus> originalVersion = ehrStatusVersion(ehrId, ehrStatusId, version);
+        return responseBuilder(HttpStatus.OK, ehrId, originalVersion).body(originalVersion.getData());
     }
 
-    /**
-     * {@inheritDoc}
-     */
     @Override
-    @PutMapping
-    @PreAuthorize("checkAbacPre(@openehrEhrStatusController.EHR_STATUS, @ehrService.getSubjectExtRef(#ehrId))")
-    public ResponseEntity<EhrStatusResponseData> updateEhrStatus(
+    @PutMapping(
+            consumes = {MediaType.APPLICATION_JSON_VALUE, MediaType.APPLICATION_XML_VALUE},
+            produces = {MediaType.APPLICATION_JSON_VALUE, MediaType.APPLICATION_XML_VALUE})
+    public ResponseEntity<EhrStatus> updateEhrStatus(
             @PathVariable("ehr_id") UUID ehrId,
             @RequestHeader(name = IF_MATCH) String versionUid,
             @RequestHeader(name = PREFER, required = false) String prefer,
-            @RequestHeader(name = HttpHeaders.ACCEPT, required = false) String accept,
-            @RequestHeader(name = HttpHeaders.CONTENT_TYPE, required = false) String contentType,
-            @RequestBody EhrStatus ehrStatus) {
+            @RequestBody EhrStatus ehrStatusDto) {
 
-        assertEhrExists(ehrId);
-
-        // If-Match header check
-        String latestVersionUid = ehrService.getLatestVersionUidOfStatus(ehrId);
-        versionUid = unwrap(versionUid, '"');
-        if (!latestVersionUid.equals(versionUid)) {
-            throw new PreconditionFailedException("Given If-Match header does not match latest existing version");
-        }
+        HttpRestContext.register(EHR_ID, ehrId);
 
         // update EHR_STATUS and check for success
-        UUID statusUid = ehrService.updateStatus(ehrId, ehrStatus, null, null);
+        ObjectVersionId targetObjId = new ObjectVersionId(versionUid);
+        EhrStatus ehrResult = ehrService.updateStatus(ehrId, ehrStatusDto, targetObjId, null, null);
+        UIDBasedId statusUid = ehrResult.getUid();
 
         // update and prepare current version number
-        String newLatestVersionUid = ehrService.getLatestVersionUidOfStatus(ehrId);
-        String[] split = latestVersionUid.split("::");
-        if (latestVersionUid.equals(newLatestVersionUid) || split.length != 3) {
-            throw new InvalidApiParameterException("Update of EHR_STATUS failed");
-        }
-        int version = Integer.parseInt(split[split.length - 1]) + 1;
+        int version = LocatableUtils.uidVersion(statusUid).orElseThrow();
+        UUID ehrStatusId = LocatableUtils.getUuid(statusUid);
 
-        List<String> headerList =
-                Arrays.asList(CONTENT_TYPE, LOCATION, ETAG, LAST_MODIFIED); // whatever is required by REST spec
-        Optional<InternalResponse<EhrStatusResponseData>>
-                respData; // variable to overload with more specific object if requested
+        // load status
+        OriginalVersion<EhrStatus> originalVersion = ehrStatusVersion(ehrId, ehrStatusId, version);
 
-        respData =
-                buildEhrStatusResponseData(EhrStatusResponseData::new, ehrId, statusUid, version, accept, headerList);
-
-        createAuditLogsMsgBuilder(ehrId);
-
-        return respData.map(i -> ResponseEntity.ok().headers(i.getHeaders()).body(i.getResponseData()))
-                .orElse(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build());
-    }
-
-    /**
-     * Assert that an EHR with the given ID exists.
-     *
-     * @param ehrId the EHR ID to check
-     * @throws ObjectNotFoundException if the EHR does not exist
-     */
-    private void assertEhrExists(UUID ehrId) {
-        if (!ehrService.hasEhr(ehrId)) {
-            throw new ObjectNotFoundException("EHR", "The EHR with the specified id does not exist");
+        // return either representation body or only the created response
+        if (RETURN_REPRESENTATION.equals(prefer)) {
+            return responseBuilder(HttpStatus.OK, ehrId, originalVersion).body(originalVersion.getData());
+        } else {
+            return responseBuilder(HttpStatus.NO_CONTENT, ehrId, originalVersion)
+                    .build();
         }
     }
 
-    private ResponseEntity<EhrStatusResponseData> internalGetEhrStatusProcessing(
-            String accept, UUID ehrId, UUID ehrStatusId, int version) {
-        List<String> headerList =
-                Arrays.asList(CONTENT_TYPE, LOCATION, ETAG, LAST_MODIFIED); // whatever is required by REST spec
+    private ResponseEntity.BodyBuilder responseBuilder(
+            HttpStatus status, UUID ehrId, OriginalVersion<EhrStatus> originalVersion) {
 
-        Optional<InternalResponse<EhrStatusResponseData>> respData =
-                buildEhrStatusResponseData(EhrStatusResponseData::new, ehrId, ehrStatusId, version, accept, headerList);
+        createRestContext(ehrId, originalVersion.getUid());
 
-        createAuditLogsMsgBuilder(ehrId);
-
-        return respData.map(i -> ResponseEntity.ok().headers(i.getHeaders()).body(i.getResponseData()))
-                .orElse(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build());
+        ObjectVersionId versionId = originalVersion.getUid();
+        URI uri = createLocationUri(EHR, ehrId.toString(), EHR_STATUS, versionId.getValue());
+        return ResponseEntity.status(status)
+                .location(uri)
+                .eTag("\"" + versionId.getValue() + "\"")
+                .lastModified(lastModifiedValue(originalVersion.getCommitAudit().getTimeCommitted()));
     }
 
-    private void createAuditLogsMsgBuilder(UUID ehrId) {
-        AuditMsgBuilder.getInstance().setEhrIds(ehrId);
+    private OriginalVersion<EhrStatus> ehrStatusVersion(UUID ehrId, UUID ehrStatusId, int version) {
+        return ehrService
+                .getEhrStatusAtVersion(ehrId, ehrStatusId, version)
+                .orElseThrow(() -> new ObjectNotFoundException(
+                        "EHR_STATUS",
+                        "Could not find EhrStatus[id=%s, version=%s]".formatted(ehrStatusId.toString(), version)));
     }
 
-    /**
-     * Builder method to prepare appropriate HTTP response. Flexible to either allow minimal or full
-     * representation of resource.
-     *
-     * @param factory     Lambda function to constructor of desired object
-     * @param ehrId       Ehr reference
-     * @param ehrStatusId EhrStatus versioned object ID
-     * @param version     EhrStatus version number
-     * @param accept      Requested content format
-     * @param headerList  Requested headers that need to be set
-     * @param <T>         Either only header response or specific class EhrStatusResponseData
-     * @return
-     */
-    private <T extends EhrStatusResponseData> Optional<InternalResponse<T>> buildEhrStatusResponseData(
-            Supplier<T> factory, UUID ehrId, UUID ehrStatusId, int version, String accept, List<String> headerList) {
-        String versionedObjectUid = String.format(
-                "%s::%s::%s", ehrStatusId, ehrService.getServerConfig().getNodename(), version);
+    private static Instant lastModifiedValue(DvDateTime dvDateTime) {
+        TemporalAccessor timeCommitted = dvDateTime.getValue();
+        if (timeCommitted.query(TemporalQueries.zone()) != null) {
+            return ZonedDateTime.from(timeCommitted).toInstant();
+        } else {
+            return LocalDateTime.from(timeCommitted).toInstant(ZoneOffset.UTC);
+        }
+    }
 
-        AuditMsgBuilder.getInstance()
-                .setEhrIds(ehrId.toString())
-                .setLocation(fromPath("")
-                        .pathSegment(EHR, ehrId.toString(), EHR_STATUS, versionedObjectUid)
+    private void createRestContext(UUID ehrId, ObjectVersionId versionId) {
+
+        HttpRestContext.register(
+                EHR_ID,
+                ehrId,
+                DIRECTORY_ID,
+                versionId.getValue(),
+                HttpRestContext.LOCATION,
+                fromPath("")
+                        .pathSegment(EHR, ehrId.toString(), EHR_STATUS, versionId.getValue())
                         .build()
                         .toString());
-
-        // create either EhrStatusResponseData or null (means no body, only headers incl. link to resource), via lambda
-        // request
-        T minimalOrRepresentation = factory.get();
-
-        // check for valid format header to produce content accordingly
-        MediaType contentType = resolveContentType(accept); // to prepare header input if this header is needed later
-
-        Optional<OriginalVersion<EhrStatus>> ehrStatus = ehrService.getEhrStatusAtVersion(ehrId, ehrStatusId, version);
-        if (minimalOrRepresentation != null) {
-            // when this "if" is true the following casting can be executed and data manipulated by reference (handled
-            // by temporary variable)
-            EhrStatusResponseData objByReference = minimalOrRepresentation;
-
-            if (ehrStatus.isPresent()) {
-                objByReference.setArchetypeNodeId(ehrStatus.get().getData().getArchetypeNodeId());
-                objByReference.setName(ehrStatus.get().getData().getName());
-                objByReference.setUid(ehrStatus.get().getUid());
-                objByReference.setSubject(ehrStatus.get().getData().getSubject());
-                objByReference.setOtherDetails(ehrStatus.get().getData().getOtherDetails());
-                objByReference.setModifiable(ehrStatus.get().getData().isModifiable());
-                objByReference.setQueryable(ehrStatus.get().getData().isQueryable());
-            } else {
-                return Optional.empty();
-            }
-        }
-
-        // create and supplement headers with data depending on which headers are requested
-        HttpHeaders respHeaders = new HttpHeaders();
-        for (String header : headerList) {
-            switch (header) {
-                case CONTENT_TYPE:
-                    respHeaders.setContentType(contentType);
-                    break;
-                case LOCATION:
-                    try {
-                        URI url = createLocationUri(EHR, ehrId.toString(), EHR_STATUS, versionedObjectUid);
-                        respHeaders.setLocation(url);
-                    } catch (Exception e) {
-                        throw new InternalServerException(e.getMessage());
-                    }
-                    break;
-                case ETAG:
-                    respHeaders.setETag("\"" + ehrStatusId + "::"
-                            + ehrService.getServerConfig().getNodename() + "::" + version + "\"");
-                    break;
-                case LAST_MODIFIED:
-                    ehrStatus.ifPresent(ehrStatusOriginalVersion -> respHeaders.setLastModified(ehrStatusOriginalVersion
-                            .getCommitAudit()
-                            .getTimeCommitted()
-                            .getMagnitude()));
-                    break;
-                default:
-                    // Ignore header
-            }
-        }
-
-        return Optional.of(new InternalResponse<>(minimalOrRepresentation, respHeaders));
     }
 }

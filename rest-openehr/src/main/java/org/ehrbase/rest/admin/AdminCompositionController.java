@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 vitasystems GmbH and Hannover Medical School.
+ * Copyright (c) 2024 vitasystems GmbH.
  *
  * This file is part of project EHRbase
  *
@@ -7,7 +7,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,17 +17,19 @@
  */
 package org.ehrbase.rest.admin;
 
+import static org.ehrbase.api.rest.HttpRestContext.COMPOSITION_ID;
+import static org.ehrbase.api.rest.HttpRestContext.EHR_ID;
+import static org.springframework.web.util.UriComponentsBuilder.fromPath;
+
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.headers.Header;
-import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.Objects;
 import java.util.UUID;
-import org.ehrbase.api.annotations.TenantAware;
-import org.ehrbase.api.audit.msg.AuditMsgBuilder;
 import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.api.rest.HttpRestContext;
 import org.ehrbase.api.service.CompositionService;
 import org.ehrbase.api.service.EhrService;
 import org.ehrbase.openehr.sdk.response.dto.admin.AdminDeleteResponseData;
@@ -41,14 +43,12 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.util.UriComponentsBuilder;
 
 /**
  * Admin API controller for Composition related data. Provides endpoint to remove compositions physically from database.
  */
 @ConditionalOnMissingBean(name = "primaryadmincompositioncontroller")
 @ConditionalOnProperty(prefix = "admin-api", name = "active")
-@TenantAware
 @Tag(name = "Admin - Composition")
 @RestController
 @RequestMapping(
@@ -71,12 +71,7 @@ public class AdminCompositionController extends BaseController {
                 @ApiResponse(
                         responseCode = "200",
                         description = "Composition has been deleted successfully.",
-                        headers = {
-                            @Header(
-                                    name = CONTENT_TYPE,
-                                    description = RESP_CONTENT_TYPE_DESC,
-                                    schema = @Schema(implementation = MediaType.class))
-                        }),
+                        headers = {@Header(name = CONTENT_TYPE, description = RESP_CONTENT_TYPE_DESC)}),
                 @ApiResponse(
                         responseCode = "401",
                         description = "Client credentials are invalid or have been expired."),
@@ -104,11 +99,13 @@ public class AdminCompositionController extends BaseController {
 
         compositionService.adminDelete(compositionUid);
 
-        AuditMsgBuilder.getInstance()
-                .setEhrIds(ehrId)
-                .setCompositionId(compositionId)
-                .setTemplateId(compositionService.retrieveTemplateId(compositionUid))
-                .setLocation(UriComponentsBuilder.fromPath("/ehr/{ehr_id}/composition/{composition_id}")
+        HttpRestContext.register(
+                EHR_ID,
+                ehrUuid,
+                COMPOSITION_ID,
+                compositionUid,
+                HttpRestContext.LOCATION,
+                fromPath("/ehr/{ehr_id}/composition/{composition_id}")
                         .build(ehrId, compositionId)
                         .toString());
 

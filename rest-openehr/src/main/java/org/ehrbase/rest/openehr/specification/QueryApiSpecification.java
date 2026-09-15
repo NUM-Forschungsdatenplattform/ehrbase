@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 vitasystems GmbH and Hannover Medical School.
+ * Copyright (c) 2024 vitasystems GmbH.
  *
  * This file is part of project EHRbase
  *
@@ -7,7 +7,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -26,11 +26,8 @@ import org.springframework.http.ResponseEntity;
 
 /**
  * OpenAPI specification for openEHR REST API QUERY resource.
- *
- * @author Renaud Subiger
- * @since 1.0
  */
-@Tag(name = "Query")
+@Tag(name = "QUERY")
 @SuppressWarnings({"unused", "java:S107"})
 public interface QueryApiSpecification {
 
@@ -61,9 +58,7 @@ public interface QueryApiSpecification {
                             url =
                                     "https://specifications.openehr.org/releases/ITS-REST/latest/query.html#query-execute-query-post"))
     ResponseEntity<QueryResponseData> executeAdHocQuery(
-            Map<String, Object> queryRequest, // FIXME: Create DTO
-            String accept,
-            String contentType);
+            Map<String, Object> queryRequest, String accept, String contentType);
 
     /**
      * Execute stored query.

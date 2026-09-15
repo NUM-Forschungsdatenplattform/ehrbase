@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 vitasystems GmbH and Hannover Medical School.
+ * Copyright (c) 2024 vitasystems GmbH.
  *
  * This file is part of project EHRbase
  *
@@ -7,7 +7,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,19 +17,18 @@
  */
 package org.ehrbase.rest.admin;
 
+import static org.ehrbase.api.rest.HttpRestContext.EHR_ID;
+import static org.ehrbase.api.rest.HttpRestContext.REMOVED_PATIENTS;
+
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.headers.Header;
-import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import java.util.Arrays;
-import java.util.Set;
+import java.util.Collections;
 import java.util.UUID;
-import java.util.stream.Collectors;
-import org.ehrbase.api.annotations.TenantAware;
-import org.ehrbase.api.audit.msg.AuditMsgBuilder;
 import org.ehrbase.api.exception.ObjectNotFoundException;
+import org.ehrbase.api.rest.HttpRestContext;
 import org.ehrbase.api.service.EhrService;
 import org.ehrbase.openehr.sdk.response.dto.admin.AdminDeleteResponseData;
 import org.ehrbase.openehr.sdk.response.dto.admin.AdminUpdateResponseData;
@@ -52,7 +51,6 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @ConditionalOnMissingBean(name = "primaryadminehrcontroller")
 @ConditionalOnProperty(prefix = "admin-api", name = "active")
-@TenantAware
 @Tag(name = "Admin - EHR")
 @RestController
 @RequestMapping(
@@ -75,12 +73,7 @@ public class AdminEhrController extends BaseController {
                 @ApiResponse(
                         responseCode = "200",
                         description = "EHR has been updated and number of updated items will be returned in the body.",
-                        headers = {
-                            @Header(
-                                    name = CONTENT_TYPE,
-                                    description = RESP_CONTENT_TYPE_DESC,
-                                    schema = @Schema(implementation = MediaType.class))
-                        }),
+                        headers = {@Header(name = CONTENT_TYPE, description = RESP_CONTENT_TYPE_DESC)}),
                 @ApiResponse(
                         responseCode = "401",
                         description = "Client credentials are invalid or have been expired."),
@@ -103,8 +96,7 @@ public class AdminEhrController extends BaseController {
             throw new ObjectNotFoundException("Admin EHR", String.format("EHR with id %s does not exist.", ehrId));
         }
 
-        AuditMsgBuilder.getInstance().setEhrIds(ehrUuid);
-
+        HttpRestContext.register(EHR_ID, ehrUuid);
         // TODO: Implement endpoint functionality
 
         return ResponseEntity.ok().body(new AdminUpdateResponseData(0));
@@ -133,16 +125,11 @@ public class AdminEhrController extends BaseController {
             throw new ObjectNotFoundException("Admin EHR", String.format("EHR with id %s does not exist.", ehrId));
         }
 
-        AuditMsgBuilder.getInstance().setEhrIds(ehrUuid).setRemovedPatients(getPatientNumbers(ehrUuid));
+        HttpRestContext.register(
+                EHR_ID, ehrUuid, REMOVED_PATIENTS, Collections.singleton(ehrService.getSubjectExtRef(ehrUuid)));
 
         ehrService.adminDeleteEhr(ehrUuid);
 
         return ResponseEntity.noContent().build();
-    }
-
-    private Set<String> getPatientNumbers(Object... ehrs) {
-        return Arrays.stream(ehrs)
-                .map(ehrId -> ehrService.getSubjectExtRef(ehrId.toString()))
-                .collect(Collectors.toSet());
     }
 }

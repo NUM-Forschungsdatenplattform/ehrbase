@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 vitasystems GmbH and Hannover Medical School.
+ * Copyright (c) 2024 vitasystems GmbH.
  *
  * This file is part of project EHRbase
  *
@@ -7,7 +7,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -20,104 +20,98 @@ package org.ehrbase.service;
 import com.nedap.archie.rm.directory.Folder;
 import com.nedap.archie.rm.support.identification.HierObjectId;
 import com.nedap.archie.rm.support.identification.ObjectVersionId;
-import com.nedap.archie.rm.support.identification.UID;
-import com.nedap.archie.rm.support.identification.UIDBasedId;
 import com.nedap.archie.rm.support.identification.VersionTreeId;
 import java.time.OffsetDateTime;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import javax.annotation.Nullable;
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.ehrbase.api.definitions.ServerConfig;
 import org.ehrbase.api.exception.ObjectNotFoundException;
 import org.ehrbase.api.exception.PreconditionFailedException;
 import org.ehrbase.api.exception.StateConflictException;
 import org.ehrbase.api.service.EhrService;
-import org.ehrbase.dao.access.util.FolderUtils;
-import org.ehrbase.jooq.pg.tables.records.EhrFolderHistoryRecord;
-import org.ehrbase.jooq.pg.tables.records.EhrFolderRecord;
+import org.ehrbase.api.service.SystemService;
+import org.ehrbase.api.service.ValidationService;
+import org.ehrbase.api.util.LocatableUtils;
 import org.ehrbase.repository.EhrFolderRepository;
 import org.ehrbase.util.UuidGenerator;
-import org.jooq.DSLContext;
-import org.jooq.Result;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * @author Stefan Spiska
- */
 @Service
 @Transactional
-public class DirectoryServiceImp extends BaseServiceImp implements InternalDirectoryService {
+public class DirectoryServiceImp implements InternalDirectoryService {
 
-    private final ServerConfig serverConfig;
+    private final SystemService systemService;
     private final EhrService ehrService;
-
     private final EhrFolderRepository ehrFolderRepository;
+    private final ValidationService validationService;
 
     public DirectoryServiceImp(
-            KnowledgeCacheService knowledgeCacheService,
-            DSLContext context,
-            ServerConfig serverConfig,
+            SystemService systemService,
             EhrService ehrService,
-            EhrFolderRepository ehrFolderRepository) {
-        super(knowledgeCacheService, context, serverConfig);
-        this.serverConfig = serverConfig;
+            EhrFolderRepository ehrFolderRepository,
+            final ValidationService validationService) {
+
+        this.systemService = systemService;
         this.ehrService = ehrService;
         this.ehrFolderRepository = ehrFolderRepository;
+        this.validationService = validationService;
     }
 
     @Override
-    public Optional<Folder> get(UUID ehrId, @Nullable ObjectVersionId folderId, @Nullable String path) {
+    public Optional<Folder> get(UUID ehrId, ObjectVersionId folderId, String path) {
 
-        List<EhrFolderRecord> ehrFolderRecords;
+        final Optional<Folder> root;
         if (folderId == null) {
-            ehrFolderRecords = ehrFolderRepository.getFolderHead(ehrId, 1);
+            // directory
+            root = ehrFolderRepository.findHead(ehrId, 1);
 
         } else {
-            VersionTreeId versionTreeId = folderId.getVersionTreeId();
-            if (versionTreeId.isBranch()) {
-                throw new UnsupportedOperationException(
-                        "Version branching is not supported: %s".formatted(versionTreeId.getValue()));
-            }
             // check creating system matches
-            if (!folderId.getCreatingSystemId().getValue().equals(serverConfig.getNodename())) {
+            if (!folderId.getCreatingSystemId().getValue().equals(systemService.getSystemId())) {
                 return Optional.empty();
             }
-            int version = Integer.parseInt(versionTreeId.getValue());
+            int version;
+            try {
+                version = LocatableUtils.uidVersion(folderId).orElseThrow();
+            } catch (NumberFormatException e) {
+                VersionTreeId versionTreeId = folderId.getVersionTreeId();
+                if (versionTreeId.isBranch()) {
+                    throw new UnsupportedOperationException(
+                            "Version branching is not supported: %s".formatted(versionTreeId.getValue()));
+                } else {
+                    throw e;
+                }
+            }
 
-            Result<EhrFolderHistoryRecord> byVersion = ehrFolderRepository.getByVersion(ehrId, version);
-            ehrFolderRecords = ehrFolderRepository.fromHistory(byVersion);
+            // directory
+            root = ehrFolderRepository.findByVersion(ehrId, 1, version);
         }
 
-        if (ehrFolderRecords.isEmpty()) {
+        if (root.isEmpty()) {
             // Check if EHR for the folder exists
             ehrService.checkEhrExists(ehrId);
             return Optional.empty();
         }
-
-        Folder root = ehrFolderRepository.from(ehrFolderRecords);
-
-        // check if id matches
-        if (folderId != null && !folderId.getRoot().equals(root.getUid().getRoot())) {
-            return Optional.empty();
-        }
-
-        return findByPath(root, StringUtils.split(path, '/'));
+        return root
+                // check if id matches
+                .filter(f ->
+                        folderId == null || folderId.getRoot().equals(f.getUid().getRoot()))
+                .flatMap(f -> findByPath(f, StringUtils.split(path, '/')));
     }
 
     @Override
-    public Optional<Folder> getByTime(UUID ehrId, OffsetDateTime time, @Nullable String path) {
-        List<EhrFolderRecord> ehrFolderRecords =
-                ehrFolderRepository.fromHistory(ehrFolderRepository.getByTime(ehrId, time));
+    public Optional<Folder> getByTime(UUID ehrId, OffsetDateTime time, String path) {
 
-        if (ehrFolderRecords.isEmpty()) {
-            return Optional.empty();
-        }
-        return findByPath(ehrFolderRepository.from(ehrFolderRecords), StringUtils.split(path, '/'));
+        Optional<ObjectVersionId> versionByTime = ehrFolderRepository.findVersionByTime(ehrId, 1, time);
+
+        return versionByTime
+                .flatMap(v -> ehrFolderRepository.findByVersion(
+                        ehrId, 1, LocatableUtils.uidVersion(v).orElseThrow()))
+                .flatMap(f -> findByPath(f, StringUtils.split(path, '/')));
     }
 
     private Optional<Folder> findByPath(Folder root, String[] path) {
@@ -146,25 +140,21 @@ public class DirectoryServiceImp extends BaseServiceImp implements InternalDirec
 
         // validation
         ehrService.checkEhrExistsAndIsModifiable(ehrId);
-        if (ehrFolderRepository.hasDirectory(ehrId)) {
+        if (ehrFolderRepository.hasFolderAtIndex(ehrId, EHR_DIRECTORY_FOLDER_IDX)) {
             throw new StateConflictException("EHR with id %s already contains a directory.".formatted(ehrId));
         }
 
-        FolderUtils.checkSiblingNameConflicts(folder);
+        UUID folderUid = Optional.of(folder).map(LocatableUtils::getUuid).orElse(UuidGenerator.randomUUID());
+        updateUuid(folder, true, folderUid, 1);
+        validationService.check(folder);
 
-        updateUuid(
-                folder,
-                true,
-                Optional.ofNullable(folder.getUid())
-                        .map(UIDBasedId::getRoot)
-                        .map(UID::getValue)
-                        .map(UUID::fromString)
-                        .orElse(UuidGenerator.randomUUID()),
-                1);
+        try {
+            ehrFolderRepository.commit(ehrId, folder, contributionId, auditId, EHR_DIRECTORY_FOLDER_IDX);
+        } catch (DuplicateKeyException _) {
+            throw new StateConflictException("FOLDER with uid %s already exist.".formatted(folderUid));
+        }
 
-        ehrFolderRepository.commit(ehrFolderRepository.toRecord(ehrId, folder), contributionId, auditId);
-
-        return get(ehrId, null, null).get();
+        return get(ehrId, null, null).orElseThrow();
     }
 
     @Override
@@ -175,20 +165,37 @@ public class DirectoryServiceImp extends BaseServiceImp implements InternalDirec
 
     @Override
     public Folder update(UUID ehrId, Folder folder, ObjectVersionId ifMatches, UUID contributionId, UUID auditId) {
+
+        UUID uuid = UUID.fromString(ifMatches.getObjectId().getValue());
+
+        // Ensure UIDs matching
+        Optional.of(folder)
+                .map(LocatableUtils::getUuid)
+                .filter(u -> !u.equals(uuid))
+                .ifPresent(u -> {
+                    throw new PreconditionFailedException(String.format("FOLDER uid %s does not match %s", u, uuid));
+                });
+
         // validation
         ehrService.checkEhrExistsAndIsModifiable(ehrId);
-        if (!ehrFolderRepository.hasDirectory(ehrId)) {
+
+        if (!ehrFolderRepository.hasFolderInEhrForVoId(ehrId, uuid, EHR_DIRECTORY_FOLDER_IDX)) {
+            // perform a second check to provide a more detailed error message
+            if (!ehrFolderRepository.hasFolderAtIndex(ehrId, EHR_DIRECTORY_FOLDER_IDX)) {
+                throw new PreconditionFailedException(
+                        String.format("EHR with id %s does not contain a directory.", ehrId.toString()));
+            }
             throw new PreconditionFailedException(
-                    String.format("EHR with id %s does not contain a directory.", ehrId.toString()));
+                    String.format("EHR with id %s does not contain a directory with id %s", ehrId, uuid));
         }
 
-        FolderUtils.checkSiblingNameConflicts(folder);
+        int version = LocatableUtils.uidVersion(ifMatches).orElseThrow();
 
-        int version = Integer.parseInt(ifMatches.getVersionTreeId().getValue());
-        updateUuid(folder, true, UUID.fromString(ifMatches.getObjectId().getValue()), version + 1);
-        ehrFolderRepository.update(ehrFolderRepository.toRecord(ehrId, folder), contributionId, auditId);
+        updateUuid(folder, true, uuid, version + 1);
+        validationService.check(folder);
+        ehrFolderRepository.update(ehrId, folder, contributionId, auditId, EHR_DIRECTORY_FOLDER_IDX);
 
-        return get(ehrId, null, null).get();
+        return get(ehrId, null, null).orElseThrow();
     }
 
     @Override
@@ -202,14 +209,14 @@ public class DirectoryServiceImp extends BaseServiceImp implements InternalDirec
 
         // validation
         ehrService.checkEhrExistsAndIsModifiable(ehrId);
-        if (!ehrFolderRepository.hasDirectory(ehrId)) {
+        if (!ehrFolderRepository.hasFolderAtIndex(ehrId, EHR_DIRECTORY_FOLDER_IDX)) {
             throw new PreconditionFailedException("EHR with id %s does not contain a directory.".formatted(ehrId));
         }
 
         ehrFolderRepository.delete(
                 ehrId,
-                UUID.fromString(ifMatches.getObjectId().getValue()),
-                Integer.parseInt(ifMatches.getVersionTreeId().getValue()),
+                LocatableUtils.getUuid(ifMatches),
+                LocatableUtils.uidVersion(ifMatches).orElseThrow(),
                 1,
                 contributionId,
                 auditId);
@@ -217,13 +224,11 @@ public class DirectoryServiceImp extends BaseServiceImp implements InternalDirec
 
     private void updateUuid(Folder folder, boolean root, UUID rootUuid, int version) {
 
-        if (folder.getUid() == null || root) {
-
-            if (root) {
-                folder.setUid(new ObjectVersionId(rootUuid + "::" + serverConfig.getNodename() + "::" + version));
-            } else {
-                folder.setUid(new HierObjectId(UuidGenerator.randomUUID().toString()));
-            }
+        if (root) {
+            folder.setUid(
+                    new ObjectVersionId(rootUuid.toString(), systemService.getSystemId(), Integer.toString(version)));
+        } else if (folder.getUid() == null) {
+            folder.setUid(new HierObjectId(UuidGenerator.randomUUID().toString()));
         }
 
         if (folder.getFolders() != null) {
@@ -242,22 +247,16 @@ public class DirectoryServiceImp extends BaseServiceImp implements InternalDirec
         }
 
         // For now only EHR.directory is supported
-        Result<EhrFolderRecord> latest = ehrFolderRepository.getFolderHead(ehrId, 1);
+        Optional<Folder> latest = ehrFolderRepository.findHead(ehrId, 1);
 
-        if (latest.isNotEmpty()) {
-            Folder from = ehrFolderRepository.from(latest);
+        if (latest.isPresent()) {
+            Folder from = latest.get();
 
-            if (!UUID.fromString(from.getUid().getRoot().getValue()).equals(folderId)) {
+            if (!LocatableUtils.getUuid(from).equals(folderId)) {
                 throw new IllegalArgumentException("FolderIds do not match");
             }
 
             ehrFolderRepository.adminDelete(ehrId, 1);
         }
-    }
-
-    @Override
-    public List<ObjectVersionId> findForContribution(UUID ehrId, UUID contributionId) {
-
-        return ehrFolderRepository.findForContribution(ehrId, contributionId);
     }
 }

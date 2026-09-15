@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 vitasystems GmbH and Hannover Medical School.
+ * Copyright (c) 2024 vitasystems GmbH.
  *
  * This file is part of project EHRbase
  *
@@ -7,7 +7,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,6 +18,7 @@
 package org.ehrbase.rest.openehr;
 
 import static org.apache.commons.lang3.StringUtils.isBlank;
+import static org.ehrbase.api.rest.HttpRestContext.QUERY_ID;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;
 import static org.springframework.http.MediaType.APPLICATION_XML_VALUE;
@@ -28,30 +29,24 @@ import static org.springframework.web.util.UriComponentsBuilder.fromPath;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import org.ehrbase.api.annotations.TenantAware;
-import org.ehrbase.api.audit.msg.AuditMsgBuilder;
 import org.ehrbase.api.exception.GeneralRequestProcessingException;
+import org.ehrbase.api.exception.InvalidApiParameterException;
 import org.ehrbase.api.exception.UnexpectedSwitchCaseException;
 import org.ehrbase.api.exception.UnsupportedMediaTypeException;
-import org.ehrbase.api.service.QueryService;
-import org.ehrbase.openehr.sdk.response.dto.ErrorBodyPayload;
-import org.ehrbase.openehr.sdk.response.dto.QueryDefinitionListResponseData;
+import org.ehrbase.api.rest.HttpRestContext;
+import org.ehrbase.api.service.StoredQueryService;
 import org.ehrbase.openehr.sdk.response.dto.QueryDefinitionResponseData;
 import org.ehrbase.openehr.sdk.response.dto.ehrscape.QueryDefinitionResultDto;
 import org.ehrbase.rest.BaseController;
 import org.ehrbase.rest.openehr.specification.DefinitionQueryApiSpecification;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.lang.Nullable;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -62,22 +57,17 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @ConditionalOnMissingBean(name = "primaryopenehrdefinitionquerycontroller")
-@TenantAware
 @RestController
 @RequestMapping(
         path = BaseController.API_CONTEXT_PATH_WITH_VERSION + "/definition/query",
         produces = {APPLICATION_JSON_VALUE, APPLICATION_XML_VALUE})
 public class OpenehrDefinitionQueryController extends BaseController implements DefinitionQueryApiSpecification {
 
-    private static final String AQL = "AQL";
-
-    private final Logger logger = LoggerFactory.getLogger(getClass());
-
-    private final QueryService queryService;
+    private final StoredQueryService storedQueryService;
 
     @Autowired
-    public OpenehrDefinitionQueryController(QueryService queryService) {
-        this.queryService = Objects.requireNonNull(queryService);
+    public OpenehrDefinitionQueryController(StoredQueryService storedQueryService) {
+        this.storedQueryService = Objects.requireNonNull(storedQueryService);
     }
 
     // ----- DEFINITION: Manage Stored Query, From definition package
@@ -92,16 +82,17 @@ public class OpenehrDefinitionQueryController extends BaseController implements 
      */
     @Override
     @GetMapping(value = {"/{qualified_query_name}", ""})
-    public ResponseEntity<QueryDefinitionListResponseData> getStoredQueryList(
+    public ResponseEntity<List<QueryDefinitionResponseData>> getStoredQueryList(
             @RequestHeader(value = ACCEPT, required = false) String accept,
             @PathVariable(value = "qualified_query_name", required = false) String qualifiedQueryName) {
 
-        logger.debug("getStoredQueryList invoked with the following input: {}", qualifiedQueryName);
+        registerLocation(qualifiedQueryName, null);
+        List<QueryDefinitionResponseData> responseData =
+                storedQueryService.retrieveStoredQueries(qualifiedQueryName).stream()
+                        .map(QueryDefinitionResponseData::new)
+                        .toList();
 
-        createAuditLogsMsgBuilder(qualifiedQueryName, null);
-        QueryDefinitionListResponseData responseData =
-                new QueryDefinitionListResponseData(queryService.retrieveStoredQueries(qualifiedQueryName));
-        AuditMsgBuilder.getInstance().setQueryId(qualifiedQueryName);
+        HttpRestContext.register(QUERY_ID, qualifiedQueryName);
 
         return ResponseEntity.ok(responseData);
     }
@@ -113,14 +104,12 @@ public class OpenehrDefinitionQueryController extends BaseController implements 
             @PathVariable(value = "qualified_query_name") String qualifiedQueryName,
             @PathVariable(value = "version") Optional<String> version) {
 
-        logger.debug(
-                "getStoredQueryVersion invoked with the following input: {}, version:{}", qualifiedQueryName, version);
-
-        createAuditLogsMsgBuilder(qualifiedQueryName, version.orElse(null));
+        registerLocation(qualifiedQueryName, version.orElse(null));
 
         QueryDefinitionResponseData queryDefinitionResponseData = new QueryDefinitionResponseData(
-                queryService.retrieveStoredQuery(qualifiedQueryName, version.orElse(null)));
-        AuditMsgBuilder.getInstance().setQueryId(qualifiedQueryName);
+                storedQueryService.retrieveStoredQuery(qualifiedQueryName, version.orElse(null)));
+
+        HttpRestContext.register(QUERY_ID, qualifiedQueryName);
 
         return ResponseEntity.ok(queryDefinitionResponseData);
     }
@@ -135,28 +124,39 @@ public class OpenehrDefinitionQueryController extends BaseController implements 
             @RequestHeader(value = ACCEPT, required = false) String accept,
             @PathVariable(value = "qualified_query_name") String qualifiedQueryName,
             @PathVariable(value = "version") Optional<String> version,
-            @RequestParam(value = "type", required = false, defaultValue = "AQL") String type,
+            @RequestParam(value = "query_type", required = false, defaultValue = StoredQueryService.AQL_QUERY_TYPE)
+                    String queryType,
             @RequestBody String queryPayload) {
 
-        logger.debug(
-                "putStoreQuery invoked with the following input: {}, version: {}, query: {}, type: {}",
-                qualifiedQueryName,
-                version,
-                queryPayload,
-                type);
-
-        if (!AQL.equalsIgnoreCase(type)) {
-            return new ResponseEntity(
-                    new ErrorBodyPayload("Invalid query", String.format("Query type:%s not supported!", type))
-                            .toString(),
-                    HttpStatus.BAD_REQUEST);
+        if (!isQueryTypeSupported(queryType)) {
+            throw new InvalidApiParameterException("Query type:%s not supported!".formatted(queryType));
         }
 
         MediaType mediaType = MediaType.parseMediaType(contentType);
-        String aql;
+        String query = extractQueryFromPayload(mediaType, queryPayload);
+
+        if (isBlank(query)) {
+            throw new InvalidApiParameterException("No %s query provided.".formatted(queryType));
+        }
+
+        registerLocation(qualifiedQueryName, version.orElse(null));
+
+        QueryDefinitionResultDto storedQuery =
+                storedQueryService.createStoredQuery(qualifiedQueryName, version.orElse(null), query, queryType);
+
+        HttpRestContext.register(QUERY_ID, qualifiedQueryName);
+
+        return getPutDefenitionResponseEntity(mediaType, storedQuery);
+    }
+
+    protected boolean isQueryTypeSupported(String queryType) {
+        return StoredQueryService.AQL_QUERY_TYPE.equals(queryType);
+    }
+
+    protected String extractQueryFromPayload(MediaType mediaType, String payload) {
+        // assume same format as adhoc POST
         if (APPLICATION_JSON.isCompatibleWith(mediaType)) {
-            // assume same format as adhoc POST
-            aql = Optional.of(queryPayload)
+            return Optional.of(payload)
                     .map(p -> {
                         try {
                             return new ObjectMapper().readTree(p);
@@ -168,43 +168,13 @@ public class OpenehrDefinitionQueryController extends BaseController implements 
                     .filter(JsonNode::isTextual)
                     .map(JsonNode::asText)
                     .orElse(null);
-
-        } else if (TEXT_PLAIN.isCompatibleWith(mediaType)) {
-            aql = queryPayload;
-        } else {
-            throw new UnsupportedMediaTypeException(mediaType.getType());
         }
 
-        if (isBlank(aql)) {
-            return new ResponseEntity(
-                    new ErrorBodyPayload("Invalid query", "no aql query provided").toString(), HttpStatus.BAD_REQUEST);
+        if (TEXT_PLAIN.isCompatibleWith(mediaType)) {
+            return payload;
         }
 
-        createAuditLogsMsgBuilder(qualifiedQueryName, version.orElse(null));
-
-        QueryDefinitionResultDto storedQuery =
-                queryService.createStoredQuery(qualifiedQueryName, version.orElse(null), aql);
-        AuditMsgBuilder.getInstance().setQueryId(qualifiedQueryName);
-
-        return getPutDefenitionResponseEntity(mediaType, storedQuery);
-    }
-
-    @Override
-    @DeleteMapping(value = {"/{qualified_query_name}/{version}"})
-    public ResponseEntity<QueryDefinitionResponseData> deleteStoredQuery(
-            @RequestHeader(value = ACCEPT, required = false) String accept,
-            @PathVariable(value = "qualified_query_name") String qualifiedQueryName,
-            @PathVariable(value = "version") String version) {
-
-        logger.debug("deleteStoredQuery for the following input: {} , version: {}", qualifiedQueryName, version);
-
-        createAuditLogsMsgBuilder(qualifiedQueryName, version);
-
-        QueryDefinitionResponseData queryDefinitionResponseData =
-                new QueryDefinitionResponseData(queryService.deleteStoredQuery(qualifiedQueryName, version));
-        AuditMsgBuilder.getInstance().setQueryId(qualifiedQueryName);
-
-        return ResponseEntity.ok(queryDefinitionResponseData);
+        throw new UnsupportedMediaTypeException(mediaType.toString());
     }
 
     private ResponseEntity<QueryDefinitionResponseData> getPutDefenitionResponseEntity(
@@ -223,9 +193,10 @@ public class OpenehrDefinitionQueryController extends BaseController implements 
         }
     }
 
-    private void createAuditLogsMsgBuilder(String queryName, @Nullable String version) {
-        AuditMsgBuilder.getInstance()
-                .setLocation(fromPath("")
+    private void registerLocation(String queryName, String version) {
+        HttpRestContext.register(
+                HttpRestContext.LOCATION,
+                fromPath("")
                         .pathSegment(DEFINITION, QUERY, queryName, version)
                         .build()
                         .toString());
