@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023 vitasystems GmbH and Hannover Medical School.
+ * Copyright (c) 2024 vitasystems GmbH.
  *
  * This file is part of project EHRbase
  *
@@ -7,7 +7,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,568 +17,435 @@
  */
 package org.ehrbase.repository;
 
-import static org.ehrbase.jooq.pg.tables.EhrFolder.EHR_FOLDER;
-import static org.ehrbase.jooq.pg.tables.EhrFolderHistory.EHR_FOLDER_HISTORY;
+import static org.ehrbase.jooq.pg.Tables.EHR_FOLDER_DATA;
+import static org.ehrbase.jooq.pg.Tables.EHR_FOLDER_VERSION;
+import static org.ehrbase.jooq.pg.Tables.EHR_FOLDER_VERSION_HISTORY;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.nedap.archie.rm.directory.Folder;
-import com.nedap.archie.rm.support.identification.ObjectId;
-import com.nedap.archie.rm.support.identification.ObjectRef;
 import com.nedap.archie.rm.support.identification.ObjectVersionId;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-import javax.annotation.Nullable;
-import org.apache.commons.lang3.tuple.Triple;
-import org.ehrbase.api.definitions.ServerConfig;
-import org.ehrbase.api.exception.PreconditionFailedException;
-import org.ehrbase.api.service.TenantService;
+import java.util.stream.Stream;
+import org.apache.commons.lang3.tuple.Pair;
+import org.ehrbase.api.service.SystemService;
 import org.ehrbase.jooq.pg.enums.ContributionChangeType;
-import org.ehrbase.jooq.pg.enums.ContributionDataType;
-import org.ehrbase.jooq.pg.tables.records.EhrFolderHistoryRecord;
-import org.ehrbase.jooq.pg.tables.records.EhrFolderRecord;
-import org.ehrbase.openehr.sdk.serialisation.jsonencoding.CanonicalJson;
+import org.ehrbase.jooq.pg.tables.EhrFolderData;
+import org.ehrbase.jooq.pg.tables.EhrFolderVersion;
+import org.ehrbase.jooq.pg.tables.EhrFolderVersionHistory;
+import org.ehrbase.jooq.pg.tables.records.EhrFolderDataRecord;
+import org.ehrbase.jooq.pg.tables.records.EhrFolderVersionHistoryRecord;
+import org.ehrbase.jooq.pg.tables.records.EhrFolderVersionRecord;
+import org.ehrbase.jooq.pg.util.AdditionalSQLFunctions;
+import org.ehrbase.openehr.dbformat.DbToRmFormat;
+import org.ehrbase.openehr.dbformat.StructureNode;
+import org.ehrbase.openehr.dbformat.VersionedObjectDataStructure;
+import org.ehrbase.repository.EhrFolderRepository.FolderParseContext;
+import org.ehrbase.repository.versioning.DataRetention;
+import org.ehrbase.service.TimeProvider;
+import org.ehrbase.service.VersioningProperties;
+import org.jooq.Condition;
 import org.jooq.DSLContext;
 import org.jooq.DeleteConditionStep;
 import org.jooq.Field;
 import org.jooq.JSONB;
 import org.jooq.Record;
-import org.jooq.Result;
+import org.jooq.Record1;
 import org.jooq.SelectConditionStep;
-import org.jooq.SelectJoinStep;
+import org.jooq.Table;
+import org.jooq.TableField;
 import org.jooq.impl.DSL;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
-/**
- * Handles DB-Access to {@link org.ehrbase.jooq.pg.tables.EhrFolder} and {@link org.ehrbase.jooq.pg.tables.EhrFolderHistory}
- *
- * @author Stefan Spiska
- */
+/// Handles DB-Access to [org.ehrbase.jooq.pg.tables.EhrFolderVersion] etc.
 @Repository
-public class EhrFolderRepository {
+public class EhrFolderRepository
+        extends AbstractVersionedObjectRepository<
+                EhrFolderVersionRecord,
+                EhrFolderDataRecord,
+                EhrFolderVersionHistoryRecord,
+                Folder,
+                FolderParseContext> {
 
-    public static final String NOT_MATCH_LATEST_VERSION = "If-Match version_uid does not match latest version.";
-    private final DSLContext context;
+    /// Prepares ArrayNodes containing the UUIDs for Folder.items to avoid O(n²) runtime for this part of the
+    /// reconstruction.
+    public static class FolderParseContext {
+        private final List<ArrayNode> itemUuidRows = new ArrayList<>();
 
-    private final TenantService tenantService;
+        public FolderParseContext(final UUID[] itemUuids, JsonNodeFactory nodeFactory) {
+            ArrayNode itemUuidsNode = nodeFactory.arrayNode();
+            for (UUID uuid : itemUuids) {
+                if (uuid == null) {
+                    if (itemUuidsNode.isEmpty()) {
+                        itemUuidRows.add(null);
+                    } else {
+                        itemUuidRows.add(itemUuidsNode);
+                        itemUuidsNode = nodeFactory.arrayNode();
+                    }
+                } else {
+                    itemUuidsNode.add(uuid.toString());
+                }
+            }
 
-    private final ContributionRepository contributionRepository;
+            if (!itemUuidsNode.isEmpty()) {
+                itemUuidRows.add(itemUuidsNode);
+            }
+        }
 
-    private final ServerConfig serverConfig;
+        public ArrayNode getItemUuidsForRow(int row) {
+            if (row < itemUuidRows.size()) {
+                return itemUuidRows.get(row);
+            }
+            return null;
+        }
+    }
+
+    private final VersioningProperties versioningProperties;
 
     public EhrFolderRepository(
             DSLContext context,
-            TenantService tenantService,
             ContributionRepository contributionRepository,
-            ServerConfig serverConfig) {
-        this.context = context;
-        this.tenantService = tenantService;
-        this.contributionRepository = contributionRepository;
-        this.serverConfig = serverConfig;
+            SystemService systemService,
+            TimeProvider timeProvider,
+            VersioningProperties versioningProperties) {
+        super(
+                AuditDetailsTargetType.EHR_FOLDER,
+                EhrFolderVersion.EHR_FOLDER_VERSION,
+                EhrFolderData.EHR_FOLDER_DATA,
+                EhrFolderVersionHistory.EHR_FOLDER_VERSION_HISTORY,
+                context,
+                contributionRepository,
+                systemService,
+                timeProvider);
+        this.versioningProperties = versioningProperties;
     }
 
-    /**
-     * Create a new Folder in the DB
-     *
-     * @param folderRecordList
-     * @param contributionId   If <code>null</code> default contribution will be created {@link ContributionRepository#createDefault(UUID, ContributionDataType, ContributionChangeType)}
-     * @param auditId          If <code>null</code> default audit will be created {@link ContributionRepository#createDefaultAudit(ContributionChangeType)}
-     */
-    @Transactional
-    public void commit(List<EhrFolderRecord> folderRecordList, @Nullable UUID contributionId, @Nullable UUID auditId) {
-        storeHead(folderRecordList, OffsetDateTime.now(), contributionId, ContributionChangeType.creation, auditId);
+    @Override
+    protected DataRetention dataRetention() {
+        return versioningProperties.ehrFolder().dataRetention();
     }
 
-    private void storeHead(
-            List<EhrFolderRecord> folderRecordList,
-            OffsetDateTime sysPeriodLower,
-            UUID contributionId,
-            ContributionChangeType contributionChangeType,
-            UUID auditId) {
-
-        UUID finalContributionId = Optional.ofNullable(contributionId)
-                .orElseGet(() -> contributionRepository.createDefault(
-                        folderRecordList.get(0).getEhrId(), ContributionDataType.folder, contributionChangeType));
-
-        UUID finalAuditId = Optional.ofNullable(auditId)
-                .orElseGet(() -> contributionRepository.createDefaultAudit(contributionChangeType));
-
-        Short sysTenant = tenantService.getCurrentSysTenant();
-
-        folderRecordList.forEach(r -> {
-            r.setSysPeriodLower(sysPeriodLower);
-            r.setSysTenant(sysTenant);
-            r.setContributionId(finalContributionId);
-            r.setAuditId(finalAuditId);
-        });
-
-        RepositoryHelper.executeBulkInsert(context, folderRecordList, EHR_FOLDER);
+    @Override
+    protected List<TableField<EhrFolderVersionRecord, ?>> getVersionDataJoinFields() {
+        return List.of(EHR_FOLDER_VERSION.EHR_ID, EHR_FOLDER_VERSION.EHR_FOLDERS_IDX);
     }
 
-    /**
-     * Update a Folder in the DB
-     *
-     * @param folderRecordList
-     * @param contributionId   If <code>null</code> default contribution will be created {@link ContributionRepository#createDefault(UUID, ContributionDataType, ContributionChangeType)}
-     * @param auditId          If <code>null</code> default audit will be created {@link ContributionRepository#createDefaultAudit(ContributionChangeType)}
-     */
-    @Transactional
-    public void update(List<EhrFolderRecord> folderRecordList, UUID contributionId, UUID auditId) {
+    @Override
+    protected AdditionalDataQuerySelectFields getAdditionalDataQuerySelectFields(
+            final Table<?> versionTable, final Table<?> dataTable, final boolean head) {
+        if (head) {
 
-        EhrFolderRecord rootFolder = findRoot(folderRecordList);
-        UUID ehrId = rootFolder.getEhrId();
-        int ehrFoldersIdx = rootFolder.getEhrFoldersIdx();
-        Result<EhrFolderRecord> oldHead = getFolderHead(ehrId, ehrFoldersIdx);
-
-        boolean isDeleted;
-        int oldVersion;
-        OffsetDateTime now;
-        EhrFolderHistoryRecord delRecord;
-        UUID rootId;
-        if (oldHead.isEmpty()) {
-            Optional<EhrFolderHistoryRecord> history = getLatestHistoryRoot(ehrId, ehrFoldersIdx);
-
-            isDeleted = history.map(x -> x.getSysDeleted())
-                    .filter(deleted -> deleted)
-                    .isPresent();
-            if (!isDeleted) {
-                throw new PreconditionFailedException(NOT_MATCH_LATEST_VERSION);
-            }
-            delRecord = history.get();
-            oldVersion = delRecord.getSysVersion();
-            now = createCurrentTime(delRecord.getSysPeriodLower());
-            rootId = delRecord.getId();
-
+            return new AdditionalDataQuerySelectFields(
+                    new Field[] {itemUuidFieldAggregation(versionTable, context)}, new Field[] {
+                        versionTable.field(EHR_FOLDER_VERSION.EHR_ID),
+                        versionTable.field(EHR_FOLDER_VERSION.EHR_FOLDERS_IDX)
+                    });
         } else {
-            isDeleted = false;
-            delRecord = null;
-            EhrFolderRecord root = findRoot(oldHead);
-            oldVersion = root.getSysVersion();
-            now = createCurrentTime(root.getSysPeriodLower());
-            rootId = root.getId();
+            return new AdditionalDataQuerySelectFields(
+                    new Field[] {versionTable.field(EHR_FOLDER_VERSION_HISTORY.OV_ITEM_UUIDS)}, new Field[] {});
         }
+    }
 
-        // versions not consecutive
-        if (oldVersion + 1 != rootFolder.getSysVersion()) {
-            throw new PreconditionFailedException(NOT_MATCH_LATEST_VERSION);
+    @Override
+    protected AdditionalCopyToHistoryFields additionalCopyToHistoryFields(
+            final Table<EhrFolderVersionRecord> versionHead,
+            final Table<EhrFolderDataRecord> dataHead,
+            final OffsetDateTime now,
+            final HistoryOperation op,
+            final boolean retainData) {
+
+        AdditionalCopyToHistoryFields base =
+                super.additionalCopyToHistoryFields(versionHead, dataHead, now, op, retainData);
+        Field<?> ovItemUuids = retainData
+                ? itemUuidFieldAggregation(versionHead, context)
+                : DSL.castNull(EHR_FOLDER_VERSION_HISTORY.OV_ITEM_UUIDS.getDataType());
+
+        return new AdditionalCopyToHistoryFields(
+                Stream.concat(base.headFields(), Stream.of(ovItemUuids)),
+                Stream.concat(base.historyFields(), Stream.of(EHR_FOLDER_VERSION_HISTORY.OV_ITEM_UUIDS)));
+    }
+
+    /// Creates an SQL expression that aggregates the `item_uuids` arrays of an EHR root folder and its subfolders into
+    /// one array with `null` as separator.
+    /// Implies that `null` is not allowed as array entry.
+    ///
+    /// |num|item_uuids       |
+    /// |---|-----------------|
+    /// | 0 |`{c00, c01}`     |
+    /// | 1 |`{}`             |
+    /// | 2 |`{c20}`          |
+    /// | 3 |`{c30, c31, c32}`|
+    ///
+    /// into `{c01, c02, null, null, c20, null, c30, c31, c32}`
+    ///
+    ///
+    /// ``` sql
+    /// trim_array((
+    ///   SELECT array_agg(uid.v ORDER BY num ASC, uid.idx ASC)
+    ///   FROM ehr_folder_data AS h2
+    ///   JOIN LATERAL (
+    ///     SELECT u.v, u.idx
+    ///     FROM unnest(
+    ///       array_append(h2.item_uuids, null),
+    ///       ARRAY(SELECT generate_series(0, cardinality(h2.item_uuids)))
+    ///     ) AS u(v, idx)
+    ///   ) AS uid(v, idx) ON true
+    ///   WHERE (h.ehr_id, h.ehr_folders_idx) = (h2.ehr_id, h2.ehr_folders_idx)
+    /// ), 1)
+    /// ```
+    ///
+    /// @param versionHead
+    /// @param ctx
+    /// @return a Field aggregating `item_uuids`
+    public static Field<?> itemUuidFieldAggregation(final Table<?> versionHead, final DSLContext ctx) {
+        EhrFolderData sqTable = EHR_FOLDER_DATA.as("h2");
+
+        // array_append(h2.item_uuids, null) - appends the row separator
+        Field<UUID[]> itemUuidsWithSeparator = DSL.arrayAppend(sqTable.ITEM_UUIDS, DSL.castNull(UUID.class));
+        // ARRAY(SELECT generate_series(0, cardinality(h2.item_uuids))) - positions incl. the separator
+        Field<Integer[]> itemUuidPositions =
+                DSL.array(ctx.selectFrom(DSL.generateSeries(DSL.inline(0), DSL.cardinality(sqTable.ITEM_UUIDS))
+                        .as("pos", "p")));
+
+        // unnest(<uuids>, <positions>) as u(v, idx)
+        Table<?> unnestedWithSeparator = AdditionalSQLFunctions.unnest(itemUuidsWithSeparator, itemUuidPositions)
+                .as("u", "v", "idx");
+        Field<UUID> unnestedUuid = DSL.field(DSL.name("u", "v"), UUID.class);
+        Field<Integer> unnestedIdx = DSL.field(DSL.name("u", "idx"), Integer.class);
+
+        // lateral (select u.v, u.idx from unnest(…) as u(v, idx)) as uid(v, idx)
+        Table<?> lateralItemUuids = DSL.lateral(
+                        ctx.select(unnestedUuid, unnestedIdx).from(unnestedWithSeparator))
+                .as("uid");
+        Field<UUID> itemUuid = lateralItemUuids.field(0, UUID.class);
+        Field<Integer> itemUuidIdx = lateralItemUuids.field(1, Integer.class);
+
+        SelectConditionStep<Record1<UUID[]>> aggregated = ctx.select(
+                        DSL.arrayAgg(itemUuid).orderBy(sqTable.NUM.asc(), itemUuidIdx.asc()))
+                .from(sqTable)
+                .join(lateralItemUuids)
+                .on(DSL.trueCondition())
+                .where(sqTable.EHR_ID
+                        .eq(versionHead.field(VERSION_PROTOTYPE.EHR_ID))
+                        .and(sqTable.EHR_FOLDERS_IDX.eq(versionHead.field(EHR_FOLDER_VERSION.EHR_FOLDERS_IDX))));
+
+        return AdditionalSQLFunctions.trim_array(aggregated.asField(), DSL.inline(1));
+    }
+
+    @Override
+    protected FolderParseContext buildParseContext(final Record rec, final ObjectMapper objectMapper) {
+        return new FolderParseContext(rec.get(3, UUID[].class), objectMapper.getNodeFactory());
+    }
+
+    @Override
+    public ParsedRow parseJsonData(
+            final Pair<CharSequence, CharSequence> p, final Record rec, final int idx, FolderParseContext ctx) {
+        ParsedRow parsed = super.parseJsonData(p, rec, idx, ctx);
+        ArrayNode itemUuidsNode = ctx.getItemUuidsForRow(idx);
+        if (itemUuidsNode != null) {
+            parsed.data().set(DbToRmFormat.FOLDER_ITEMS_UUID_ARRAY_ALIAS, itemUuidsNode);
         }
+        return parsed;
+    }
 
-        // root ids do not match
-        if (!rootId.equals(rootFolder.getId())) {
-            throw new PreconditionFailedException(NOT_MATCH_LATEST_VERSION);
+    /// Create a new Folder in the DB
+    ///
+    /// @param ehrId            Affected `EHR`
+    /// @param folder           The [Folder] to commit
+    /// @param contributionId   If `null` default contribution will be created
+    ///[ContributionRepository#createDefault(UUID, ContributionDataType , ContributionChangeType)]
+    /// @param auditId          If `null` default audit will be created
+    ///[ContributionRepository#createDefaultAudit(ContributionChangeType, AuditDetailsTargetType)]
+    @Transactional
+    public void commit(UUID ehrId, Folder folder, UUID contributionId, UUID auditId, int ehrFoldersIdx) {
+        commitHead(
+                ehrId,
+                folder,
+                contributionId,
+                auditId,
+                ContributionChangeType.creation,
+                r -> r.setEhrFoldersIdx(ehrFoldersIdx),
+                (n, r) -> addExtraFolderData(ehrId, ehrFoldersIdx, n, r));
+    }
+
+    public static void addExtraFolderData(UUID ehrId, int ehrFoldersIdx, StructureNode n, EhrFolderDataRecord r) {
+        // TODO could be moved to earlier stage.
+        //  r.data - items needs to be performed and setting data twice should be omitted
+        JsonNode itemsNode = n.getJsonNode().remove("items");
+        r.setItemUuids(getItemUuids(itemsNode));
+
+        if (itemsNode != null) {
+            // re-serialize the json because items was removed
+            r.setData(JSONB.valueOf(
+                    VersionedObjectDataStructure.applyRmAliases(n.getJsonNode()).toString()));
         }
+        r.setEhrId(ehrId);
+        r.setEhrFoldersIdx(ehrFoldersIdx);
+    }
 
-        if (isDeleted) {
-            // update delete record period
-            delRecord.setSysPeriodUpper(now);
-            int updateCount = context.executeUpdate(delRecord);
-            if (updateCount != 1) {
-                // concurrent modification
-                throw new PreconditionFailedException(NOT_MATCH_LATEST_VERSION);
+    private static UUID[] getItemUuids(JsonNode itemsNode) {
+        if (itemsNode == null) {
+            return new UUID[0];
+        }
+        int size = itemsNode.size();
+        if (size == 0) {
+            return new UUID[0];
+        }
+        UUID[] result = new UUID[size];
+        for (int i = 0; i < size; i++) {
+            // id and value are not optional
+            String uuidText = itemsNode.get(i).get("id").get("value").asText();
+            try {
+                result[i] = UUID.fromString(uuidText);
+            } catch (IllegalArgumentException _) {
+                throw new IllegalArgumentException("Only UUIDs are supported as FOLDER.items.id.value");
             }
-
-        } else {
-            // move to history
-            List<EhrFolderHistoryRecord> historyRecords =
-                    oldHead.stream().map(r -> toHistory(r, now)).toList();
-
-            RepositoryHelper.executeBulkInsert(context, historyRecords, EHR_FOLDER_HISTORY);
-
-            int deleteCount = context.deleteFrom(EHR_FOLDER)
-                    .where(EHR_FOLDER.EHR_ID.eq(ehrId))
-                    .and(EHR_FOLDER.SYS_VERSION.eq(oldVersion))
-                    .execute();
-
-            if (deleteCount == 0) {
-                // concurrent modification
-                throw new PreconditionFailedException(NOT_MATCH_LATEST_VERSION);
-            }
         }
-
-        // store new head
-        storeHead(folderRecordList, now, contributionId, ContributionChangeType.modification, auditId);
+        return result;
     }
 
-    private static EhrFolderRecord findRoot(List<EhrFolderRecord> folderRecordList) {
-        return folderRecordList.stream()
-                .filter(r -> r.getPath().length == 1)
-                .findAny()
-                .orElseThrow();
+    /// Update a Folder in the DB
+    ///
+    /// @param ehrId            Affected `EHR`
+    /// @param folder           Affected `Folder` with new head system version
+    /// @param contributionId   If `null` default contribution will be created
+    ///[ContributionRepository#createDefault(UUID, ContributionDataType, ContributionChangeType)]
+    /// @param auditId          If `null` default audit will be created
+    ///[ContributionRepository#createDefaultAudit(ContributionChangeType, AuditDetailsTargetType)]
+    @Transactional
+    public void update(UUID ehrId, Folder folder, UUID contributionId, UUID auditId, int ehrFoldersIdx) {
+
+        update(
+                ehrId,
+                folder,
+                singleFolderInEhrCondition(ehrId, ehrFoldersIdx),
+                singleFolderInEhrCondition(ehrId, ehrFoldersIdx),
+                contributionId,
+                auditId,
+                r -> r.setEhrFoldersIdx(ehrFoldersIdx),
+                (n, r) -> addExtraFolderData(ehrId, ehrFoldersIdx, n, r),
+                "No FOLDER in ehr: %s".formatted(ehrId));
     }
 
-    private static EhrFolderHistoryRecord toHistory(EhrFolderRecord ehrFolderRecord, OffsetDateTime sysPeriodUpper) {
-        EhrFolderHistoryRecord historyRecord = ehrFolderRecord.into(EHR_FOLDER_HISTORY);
-        historyRecord.setSysPeriodUpper(sysPeriodUpper);
-        historyRecord.setSysDeleted(false);
-
-        return historyRecord;
+    public Optional<Folder> findHead(UUID ehrId, int ehrFoldersIdx) {
+        return findHead(singleFolderInEhrCondition(ehrId, ehrFoldersIdx));
     }
 
-    /**
-     * Determines the current time.
-     *
-     * @param lowerBound For proper version intervals the value is guaranteed to be at least 1 microsecond after lowerBound
-     * @return
-     */
-    private static OffsetDateTime createCurrentTime(OffsetDateTime lowerBound) {
-        OffsetDateTime now = OffsetDateTime.now();
-        // sysPeriodUpper must be after sysPeriodLower for proper intervals
-        if (now.isAfter(lowerBound)) {
-            return now;
-        }
-        // Add one microsecond, so the interval is valid.
-        // Resolution of postgres timestamps is 1 microsecond
-        // https://www.postgresql.org/docs/14/datatype-datetime.html#DATATYPE-DATETIME-TABLE
-        return lowerBound.plusNanos(1_000);
-    }
-
-    public List<EhrFolderRecord> fromHistory(List<EhrFolderHistoryRecord> historyRecords) {
-        return historyRecords.stream().map(this::fromHistory).toList();
-    }
-
-    private EhrFolderRecord fromHistory(EhrFolderHistoryRecord historyRecord) {
-        return historyRecord.into(EHR_FOLDER);
-    }
-
-    /**
-     * Get the all folders of the latest active (not deleted) Version from the DB for a given Ehr.
-     *
-     * @param ehrId
-     * @param ehrFoldersIdx
-     * @return
-     */
-    public Result<EhrFolderRecord> getFolderHead(UUID ehrId, int ehrFoldersIdx) {
-        return context.selectFrom(EHR_FOLDER)
-                .where(EHR_FOLDER.EHR_ID.eq(ehrId), EHR_FOLDER.EHR_FOLDERS_IDX.eq(ehrFoldersIdx))
-                .fetch();
-    }
-
-    /**
-     * Get the latest root folder from the History in the DB for a given Ehr.
-     *
-     * @param ehrid
-     * @return
-     */
-    public Optional<EhrFolderHistoryRecord> getLatestHistoryRoot(UUID ehrid, int ehrFoldersIdx) {
-        return context.selectFrom(EHR_FOLDER_HISTORY)
-                .where(
-                        EHR_FOLDER_HISTORY.EHR_ID.eq(ehrid),
-                        EHR_FOLDER_HISTORY.EHR_FOLDERS_IDX.eq(ehrFoldersIdx),
-                        EHR_FOLDER_HISTORY.ROW_NUM.eq(0))
-                .orderBy(EHR_FOLDER_HISTORY.SYS_VERSION.desc())
-                .limit(1)
-                .fetchOptional();
-    }
-
-    /**
-     * Delete a  Folder in the DB
-     *
-     * @param ehrId
-     * @param rootFolderId
-     * @param version        Version to be deleted. Must match latest.
-     * @param ehrFoldersIdx
-     * @param contributionId If <code>null</code> default contribution will be created {@link ContributionRepository#createDefault(UUID, ContributionDataType, ContributionChangeType)}
-     * @param auditId        If <code>null</code> default audit will be created {@link ContributionRepository#createDefaultAudit(ContributionChangeType)}
-     */
+    /// Delete a  Folder in the DB
+    ///
+    /// @param ehrId          Affected `EHR`
+    /// @param rootFolderId`EHR` root [Folder]
+    /// @param version        Version to be deleted. Must match latest
+    /// @param ehrFoldersIdx`EHR` folder index to delete
+    /// @param contributionId If `null` default contribution will be created
+    ///[ContributionRepository#createDefault(UUID, ContributionDataType, ContributionChangeType)]
+    /// @param auditId        If `null` default audit will be created
+    ///[ContributionRepository#createDefaultAudit(ContributionChangeType, AuditDetailsTargetType)]
     @Transactional
     public void delete(
             UUID ehrId, UUID rootFolderId, int version, int ehrFoldersIdx, UUID contributionId, UUID auditId) {
-
-        Result<EhrFolderRecord> headFolders = getFolderHead(ehrId, ehrFoldersIdx);
-        if (headFolders.isEmpty()) {
-            throw new PreconditionFailedException(NOT_MATCH_LATEST_VERSION);
-        }
-
-        EhrFolderRecord headRoot = findRoot(headFolders);
-        if (headRoot.getSysVersion() != version || !headRoot.getId().equals(rootFolderId)) {
-            throw new PreconditionFailedException(NOT_MATCH_LATEST_VERSION);
-        }
-
-        // timestamp for sysPeriod
-        OffsetDateTime now = createCurrentTime(headRoot.getSysPeriodLower());
-
-        List<EhrFolderHistoryRecord> historyRecords =
-                headFolders.stream().map(r -> toHistory(r, now)).toList();
-
-        // copy head to history
-        RepositoryHelper.executeBulkInsert(context, historyRecords, EHR_FOLDER_HISTORY);
-
-        if (contributionId == null) {
-            contributionId = contributionRepository.createDefault(
-                    ehrId, ContributionDataType.folder, ContributionChangeType.deleted);
-        }
-
-        if (auditId == null) {
-            auditId = contributionRepository.createDefaultAudit(ContributionChangeType.deleted);
-        }
-
-        // add delete entry to history
-        EhrFolderHistoryRecord delRecord = headRoot.into(EHR_FOLDER_HISTORY);
-        delRecord.setSysVersion(version + 1);
-        delRecord.setSysPeriodUpper(null);
-        delRecord.setSysPeriodLower(now);
-        delRecord.setSysDeleted(true);
-        delRecord.setContributionId(contributionId);
-        delRecord.setAuditId(auditId);
-        // reset unused fields
-        delRecord.setArchetypeNodeId(null);
-        delRecord.setItems(null);
-        delRecord.setFields(null);
-
-        context.executeInsert(delRecord);
-
-        // delete from head
-        int deleteCount = context.deleteFrom(EHR_FOLDER)
-                .where(
-                        EHR_FOLDER.EHR_ID.eq(ehrId),
-                        EHR_FOLDER.EHR_FOLDERS_IDX.eq(ehrFoldersIdx),
-                        EHR_FOLDER.SYS_VERSION.eq(version))
-                .execute();
-
-        if (deleteCount == 0) {
-            // concurrent modification
-            throw new PreconditionFailedException(NOT_MATCH_LATEST_VERSION);
-        }
+        Table<EhrFolderVersionRecord> table = tables.versionHead();
+        delete(
+                ehrId,
+                singleFolderInEhrCondition(ehrId, ehrFoldersIdx)
+                        .andThen(c -> c.and(table.field(VERSION_PROTOTYPE.VO_ID).eq(rootFolderId))),
+                version,
+                contributionId,
+                auditId,
+                "No folder with %s ".formatted(rootFolderId));
     }
 
-    public Result<EhrFolderHistoryRecord> getByVersion(UUID ehrId, int version) {
+    public Optional<Folder> findByVersion(UUID ehrId, int folderIdx, int version) {
 
-        SelectConditionStep<Record> headQuery =
-                headQuery(context).where(EHR_FOLDER.EHR_ID.eq(ehrId), EHR_FOLDER.SYS_VERSION.eq(version));
-
-        Field<?>[] fields = convertToEhrFolderHistoryFields(headQuery.fields());
-
-        SelectConditionStep<Record> historyQuery = context.select(fields)
-                .from(EHR_FOLDER_HISTORY)
-                .where(
-                        EHR_FOLDER_HISTORY.EHR_ID.eq(ehrId),
-                        EHR_FOLDER_HISTORY.SYS_VERSION.eq(version),
-                        EHR_FOLDER_HISTORY.SYS_DELETED.isFalse());
-
-        return headQuery.unionAll(historyQuery).fetch().into(EHR_FOLDER_HISTORY);
+        return findByVersion(
+                singleFolderInEhrCondition(ehrId, folderIdx), singleFolderInEhrCondition(ehrId, folderIdx), version);
     }
 
-    /**
-     * Converts an array of JOOQ {@link Field}s to an array of JOOQ {@link Field}s of type {@code EHR_FOLDER_HISTORY},
-     * applying a given {@link Function} to each field.
-     *
-     * @param fields the array of JOOQ {@link Field}s to be converted
-     * @return an array of JOOQ {@link Field}s of type {@code EHR_FOLDER_HISTORY}
-     * */
-    public Field<?>[] convertToEhrFolderHistoryFields(Field<?>[] fields) {
-        return Arrays.stream(fields).map(EHR_FOLDER_HISTORY::field).toArray(Field[]::new);
+    @Override
+    public Class<Folder> getLocatableClass() {
+        return Folder.class;
     }
 
-    private static SelectJoinStep<Record> headQuery(DSLContext context) {
-        return context.select(EHR_FOLDER.fields())
-                .select(
-                        DSL.inline((OffsetDateTime) null).as(EHR_FOLDER_HISTORY.SYS_PERIOD_UPPER.getName()),
-                        DSL.inline(false).as(EHR_FOLDER_HISTORY.SYS_DELETED.getName()))
-                .from(EHR_FOLDER);
+    public Optional<ObjectVersionId> findVersionByTime(UUID ehrId, int folderIdx, OffsetDateTime time) {
+        return findVersionByTime(
+                singleFolderInEhrCondition(ehrId, folderIdx), singleFolderInEhrCondition(ehrId, folderIdx), time);
     }
 
-    public Result<EhrFolderHistoryRecord> getByTime(UUID ehrId, OffsetDateTime time) {
+    public boolean hasFolderAtIndex(UUID ehrId, int ehrFolderIdx) {
 
-        SelectConditionStep<Record> headQuery =
-                headQuery(context).where(EHR_FOLDER.EHR_ID.eq(ehrId), EHR_FOLDER.SYS_PERIOD_LOWER.lessOrEqual(time));
-
-        Field<?>[] fields = convertToEhrFolderHistoryFields(headQuery.fields());
-
-        SelectConditionStep<Record> historyQuery = context.select(fields)
-                .from(EHR_FOLDER_HISTORY)
-                .where(
-                        EHR_FOLDER_HISTORY.EHR_ID.eq(ehrId),
-                        EHR_FOLDER_HISTORY.SYS_PERIOD_LOWER.lessOrEqual(time),
-                        EHR_FOLDER_HISTORY
-                                .SYS_PERIOD_UPPER
-                                .greaterThan(time)
-                                .or(EHR_FOLDER_HISTORY.SYS_PERIOD_UPPER.isNull()),
-                        EHR_FOLDER_HISTORY.SYS_DELETED.isFalse());
-
-        return headQuery.unionAll(historyQuery).fetch().into(EHR_FOLDER_HISTORY);
-    }
-
-    public Folder from(List<EhrFolderRecord> ehrFolderRecords) {
-
-        Map<List<String>, EhrFolderRecord> byPathMap = ehrFolderRecords.stream()
-                .collect(Collectors.toMap(
-                        ehrFolderRecord ->
-                                Arrays.stream(ehrFolderRecord.getPath()).toList(),
-                        Function.identity()));
-
-        return from(
-                byPathMap.keySet().stream().filter(l -> l.size() == 1).findAny().orElseThrow(), byPathMap);
-    }
-
-    private static Folder from(List<String> path, Map<List<String>, EhrFolderRecord> byPathMap) {
-
-        Folder folder =
-                new CanonicalJson().unmarshal(byPathMap.get(path).getFields().data(), Folder.class);
-
-        byPathMap.keySet().stream().filter(l -> l.size() == path.size() + 1).forEach(nextPath -> {
-            Folder subFolder = from(
-                    nextPath,
-                    byPathMap.entrySet().stream()
-                            .filter(e -> e.getKey().size() >= nextPath.size()
-                                    && e.getKey().subList(0, nextPath.size()).equals(nextPath))
-                            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
-
-            folder.addFolder(subFolder);
-        });
-
-        return folder;
-    }
-
-    public boolean hasDirectory(UUID ehrId) {
+        Table<EhrFolderVersionRecord> versionHead = tables.versionHead();
         var headQuery = context.selectOne()
-                .from(EHR_FOLDER)
-                .where(EHR_FOLDER.EHR_ID.eq(ehrId), EHR_FOLDER.EHR_FOLDERS_IDX.eq(1));
+                .from(versionHead)
+                .where(singleFolderInEhrCondition(ehrId, ehrFolderIdx).apply(versionHead));
+
+        Table<EhrFolderVersionHistoryRecord> history = tables.history();
         var historyQuery = context.selectOne()
-                .from(EHR_FOLDER_HISTORY)
-                .where(EHR_FOLDER_HISTORY.EHR_ID.eq(ehrId), EHR_FOLDER_HISTORY.EHR_FOLDERS_IDX.eq(1));
+                .from(history)
+                .where(singleFolderInEhrCondition(ehrId, ehrFolderIdx).apply(history));
+
         return context.fetchExists(headQuery.unionAll(historyQuery));
     }
 
-    public List<EhrFolderRecord> toRecord(UUID ehrId, Folder folder) {
+    public boolean hasFolderInEhrForVoId(UUID ehrId, UUID voId, int ehrFolderIdx) {
 
-        List<Triple<List<String>, List<Integer>, Folder>> flatten = flatten(folder);
-        List<EhrFolderRecord> ehrFolderRecords = IntStream.range(0, flatten.size())
-                .mapToObj(i -> toRecord(i, flatten.get(i), ehrId))
-                .toList();
+        final Table<EhrFolderVersionRecord> versionTable = tables.versionHead();
+        final Table<EhrFolderVersionHistoryRecord> historyTable = tables.history();
 
-        if (folder.getUid() instanceof ObjectVersionId objectVersionId) {
-            ehrFolderRecords.forEach(r -> r.setSysVersion(
-                    Integer.valueOf(objectVersionId.getVersionTreeId().getValue())));
-        }
+        var headQuery = context.selectOne()
+                .from(versionTable)
+                .where(folderInEhrWithVoIdCondition(ehrId, voId, ehrFolderIdx).apply(versionTable));
 
-        return ehrFolderRecords;
-    }
+        var historyQuery = context.selectOne()
+                .from(historyTable)
+                .where(folderInEhrWithVoIdCondition(ehrId, voId, ehrFolderIdx)
+                        .apply(historyTable)
+                        .and(historyTable.field(EHR_FOLDER_VERSION.SYS_VERSION).eq(1)));
 
-    private EhrFolderRecord toRecord(int rowNum, Triple<List<String>, List<Integer>, Folder> flattened, UUID ehrId) {
-
-        EhrFolderRecord folder2Record = context.newRecord(EHR_FOLDER);
-
-        folder2Record.setEhrId(ehrId);
-        // For now there is only one Folder hierarchy per ehr.
-        folder2Record.setEhrFoldersIdx(1);
-        folder2Record.setRowNum(rowNum);
-
-        List<String> path = flattened.getLeft();
-        folder2Record.setPath(path.toArray(String[]::new));
-
-        Folder folder = flattened.getRight();
-        folder2Record.setId(UUID.fromString(folder.getUid().getRoot().getValue()));
-        folder2Record.setArchetypeNodeId(folder.getArchetypeNodeId());
-
-        folder2Record.setItems(findItems(folder));
-
-        List<Integer> indexList = flattened.getMiddle();
-        // Add index for root
-        indexList.add(0, 0);
-        folder2Record.setHierarchyIdx(encodeIndex(indexList, false));
-        folder2Record.setHierarchyIdxCap(encodeIndex(indexList, true));
-        folder2Record.setHierarchyIdxLen(indexList.size());
-
-        // Exclude folders from JSON record
-        folder.setFolders(null);
-        folder2Record.setFields(JSONB.valueOf(new CanonicalJson().marshal(folder)));
-
-        return folder2Record;
-    }
-
-    private static String encodeIndex(List<Integer> index, boolean addCap) {
-        return index.stream().map(Objects::toString).collect(Collectors.joining(",", "", addCap ? ",~" : ","));
-    }
-
-    private UUID[] findItems(Folder folder) {
-        UUID[] value = null;
-        if (folder.getItems() != null) {
-
-            value = folder.getItems().stream()
-                    .map(ObjectRef::getId)
-                    .map(ObjectId::getValue)
-                    .map(UUID::fromString)
-                    .toArray(UUID[]::new);
-        }
-
-        return value;
-    }
-
-    /**
-     * For each folder in the hierarchy a triple (name path, index path, Folder) is added to the list
-     * @param folder
-     * @return
-     */
-    private static List<Triple<List<String>, List<Integer>, Folder>> flatten(Folder folder) {
-
-        // List of Triple<name path, index path, Folder>
-        List<Triple<List<String>, List<Integer>, Folder>> flattened = new ArrayList<>();
-
-        {
-            // add a root entry for this path
-            List<String> namePath = new ArrayList<>();
-            namePath.add(folder.getNameAsString());
-            List<Integer> indexPath = new ArrayList<>();
-            flattened.add(Triple.of(namePath, indexPath, folder));
-        }
-
-        if (folder.getFolders() != null) {
-
-            IntStream.range(0, folder.getFolders().size())
-                    // for each subfolder: flatten & prefix each entry with the path of this folder
-                    .forEach(i -> flatten(folder.getFolders().get(i)).forEach(p -> {
-                        List<String> namePath = new ArrayList<>();
-                        namePath.add(folder.getNameAsString());
-                        namePath.addAll(p.getLeft());
-                        List<Integer> indexPath = p.getMiddle();
-                        indexPath.add(0, i);
-                        flattened.add(Triple.of(namePath, indexPath, p.getRight()));
-                    }));
-        }
-
-        return flattened;
+        return context.fetchExists(headQuery.unionAll(historyQuery));
     }
 
     @Transactional
     public void adminDelete(UUID ehrId, Integer ehrFoldersIdx) {
-        context.deleteFrom(EHR_FOLDER).where(EHR_FOLDER.EHR_ID.eq(ehrId)).execute();
-        DeleteConditionStep<EhrFolderHistoryRecord> deleteQuery =
-                context.deleteFrom(EHR_FOLDER_HISTORY).where(EHR_FOLDER_HISTORY.EHR_ID.eq(ehrId));
+        Table<EhrFolderVersionRecord> versionHead = tables.versionHead();
+        DeleteConditionStep<EhrFolderVersionRecord> deleteQuery = context.deleteFrom(versionHead)
+                .where(versionHead.field(VERSION_PROTOTYPE.EHR_ID).eq(ehrId));
+        if (ehrFoldersIdx != null) {
+            deleteQuery = deleteQuery.and(
+                    versionHead.field(EHR_FOLDER_VERSION.EHR_FOLDERS_IDX).eq(ehrFoldersIdx));
+        }
+        deleteQuery.execute();
+
+        Table<EhrFolderVersionHistoryRecord> history = tables.history();
+        DeleteConditionStep<EhrFolderVersionHistoryRecord> deleteHistoryQuery = context.deleteFrom(history)
+                .where(history.field(HISTORY_PROTOTYPE.EHR_ID).eq(ehrId));
 
         if (ehrFoldersIdx != null) {
-            deleteQuery = deleteQuery.and(EHR_FOLDER_HISTORY.EHR_FOLDERS_IDX.eq(ehrFoldersIdx));
+            deleteHistoryQuery = deleteHistoryQuery.and(
+                    history.field(EHR_FOLDER_VERSION_HISTORY.EHR_FOLDERS_IDX).eq(ehrFoldersIdx));
         }
 
-        deleteQuery.execute();
+        deleteHistoryQuery.execute();
     }
 
-    public List<ObjectVersionId> findForContribution(UUID ehrId, UUID contributionId) {
+    private Function<Table<?>, Condition> singleFolderInEhrCondition(UUID ehrId, int folderIdx) {
+        return table -> table.field(VERSION_PROTOTYPE.EHR_ID)
+                .eq(ehrId)
+                .and(table.field(EHR_FOLDER_VERSION.EHR_FOLDERS_IDX).eq(folderIdx));
+    }
 
-        var headQuery = context.select(EHR_FOLDER.ID, EHR_FOLDER.SYS_VERSION)
-                .from(EHR_FOLDER)
-                .where(
-                        EHR_FOLDER.EHR_ID.eq(ehrId),
-                        EHR_FOLDER.ROW_NUM.eq(0),
-                        EHR_FOLDER.EHR_FOLDERS_IDX.eq(1),
-                        EHR_FOLDER.CONTRIBUTION_ID.eq(contributionId));
-        var historyQuery = context.select(EHR_FOLDER_HISTORY.ID, EHR_FOLDER_HISTORY.SYS_VERSION)
-                .from(EHR_FOLDER_HISTORY)
-                .where(
-                        EHR_FOLDER_HISTORY.EHR_ID.eq(ehrId),
-                        EHR_FOLDER_HISTORY.ROW_NUM.eq(0),
-                        EHR_FOLDER_HISTORY.EHR_FOLDERS_IDX.eq(1),
-                        EHR_FOLDER_HISTORY.CONTRIBUTION_ID.eq(contributionId));
-        return headQuery.unionAll(historyQuery).stream()
-                .map(r -> new ObjectVersionId(
-                        r.value1().toString() + "::" + serverConfig.getNodename() + "::" + r.value2()))
-                .toList();
+    private Function<Table<?>, Condition> folderInEhrWithVoIdCondition(UUID ehrId, UUID voId, int folderIdx) {
+        return table -> Objects.requireNonNull(table.field(VERSION_PROTOTYPE.EHR_ID))
+                .eq(ehrId)
+                .and(table.field(EHR_FOLDER_VERSION.VO_ID).eq(voId))
+                .and(table.field(EHR_FOLDER_VERSION.EHR_FOLDERS_IDX).eq(folderIdx));
     }
 }

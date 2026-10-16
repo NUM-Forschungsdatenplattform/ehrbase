@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020 vitasystems GmbH and Hannover Medical School.
+ * Copyright (c) 2024 vitasystems GmbH.
  *
  * This file is part of project EHRbase
  *
@@ -7,7 +7,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,11 +18,9 @@
 package org.ehrbase.rest.admin;
 
 import io.swagger.v3.oas.annotations.headers.Header;
-import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.ehrbase.api.annotations.TenantAware;
 import org.ehrbase.openehr.sdk.response.dto.admin.AdminStatusResponseData;
 import org.ehrbase.rest.BaseController;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -35,7 +33,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 @ConditionalOnMissingBean(name = "primaryadmincontroller")
 @ConditionalOnProperty(prefix = "admin-api", name = "active")
-@TenantAware
 @Tag(name = "Admin - Heartbeat")
 @RestController
 @RequestMapping(
@@ -49,12 +46,7 @@ public class AdminController extends BaseController {
                 @ApiResponse(
                         responseCode = "200",
                         description = "Admin API resources available and user has permission to access.",
-                        headers = {
-                            @Header(
-                                    name = CONTENT_TYPE,
-                                    description = RESP_CONTENT_TYPE_DESC,
-                                    schema = @Schema(implementation = MediaType.class))
-                        }),
+                        headers = {@Header(name = CONTENT_TYPE, description = RESP_CONTENT_TYPE_DESC)}),
                 @ApiResponse(responseCode = "401", description = "Client credentials are invalid or have expired."),
                 @ApiResponse(
                         responseCode = "403",

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 vitasystems GmbH and Hannover Medical School.
+ * Copyright (c) 2024 vitasystems GmbH.
  *
  * This file is part of project EHRbase
  *
@@ -7,7 +7,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -19,19 +19,16 @@ package org.ehrbase.plugin.dto;
 
 import java.util.Map;
 import java.util.Objects;
-import org.springframework.lang.Nullable;
 
 /**
  * Wrapper for an Aql String <code>query</code> with optional <code>parameters</code>
- *
- * @author Stefan Spiska
  */
 public class QueryWithParameters {
 
     private final String query;
     private final Map<String, Object> parameters;
 
-    public QueryWithParameters(String query, @Nullable Map<String, Object> parameters) {
+    public QueryWithParameters(String query, Map<String, Object> parameters) {
         this.query = query;
         this.parameters = parameters;
     }

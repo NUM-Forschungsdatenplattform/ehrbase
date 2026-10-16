@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 vitasystems GmbH and Hannover Medical School.
+ * Copyright (c) 2024 vitasystems GmbH.
  *
  * This file is part of project EHRbase
  *
@@ -7,7 +7,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,7 +21,9 @@ import java.net.URI;
 import java.nio.file.AccessDeniedException;
 import java.util.HashMap;
 import java.util.Map;
+import org.ehrbase.api.exception.AqlFeatureNotImplementedException;
 import org.ehrbase.api.exception.GeneralRequestProcessingException;
+import org.ehrbase.api.exception.IllegalAqlException;
 import org.ehrbase.api.exception.InvalidApiParameterException;
 import org.ehrbase.api.exception.NotAcceptableException;
 import org.ehrbase.api.exception.ObjectNotFoundException;
@@ -33,6 +35,8 @@ import org.ehrbase.api.exception.ValidationException;
 import org.ehrbase.openehr.sdk.serialisation.exception.UnmarshalException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -50,11 +54,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 /**
  * EhrScape API exception handler.
- *
- * @author Renaud Subiger
- * @since 1.0.0
  */
 @RestControllerAdvice(basePackages = "org.ehrbase.rest.ehrscape.controller")
+@Order(Ordered.HIGHEST_PRECEDENCE)
 public class EhrScapeExceptionHandler {
 
     private final Logger logger = LoggerFactory.getLogger(getClass());
@@ -75,73 +77,80 @@ public class EhrScapeExceptionHandler {
         UnprocessableEntityException.class,
         ValidationException.class,
         UnmarshalException.class,
+        AqlFeatureNotImplementedException.class,
+        IllegalAqlException.class,
     })
     public ResponseEntity<Object> handleBadRequestExceptions(Exception ex) {
-        return handleExceptionInternal(ex, ex.getMessage(), new HttpHeaders(), HttpStatus.BAD_REQUEST);
+        return handleExceptionInternal(ex, ex.getMessage(), HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<Object> handleObjectNotFoundException(AccessDeniedException ex) {
-        return handleExceptionInternal(ex, ex.getMessage(), new HttpHeaders(), HttpStatus.FORBIDDEN);
+    public ResponseEntity<Object> handleAccessDeniedException(AccessDeniedException ex) {
+        return handleExceptionInternal(ex, ex.getMessage(), HttpStatus.FORBIDDEN);
     }
 
     // 404
     @ExceptionHandler(ObjectNotFoundException.class)
     public ResponseEntity<Object> handleObjectNotFoundException(ObjectNotFoundException ex) {
-        return handleExceptionInternal(ex, ex.getMessage(), new HttpHeaders(), HttpStatus.NOT_FOUND);
+        return handleExceptionInternal(ex, ex.getMessage(), HttpStatus.NOT_FOUND);
     }
 
     // 406
     @ExceptionHandler({HttpMediaTypeNotAcceptableException.class, NotAcceptableException.class})
-    public ResponseEntity<Object> handleNotAcceptableException(NotAcceptableException ex) {
-        return handleExceptionInternal(ex, ex.getMessage(), new HttpHeaders(), HttpStatus.NOT_ACCEPTABLE);
+    public ResponseEntity<Object> handleNotAcceptableException(Exception ex) {
+        return handleExceptionInternal(ex, ex.getMessage(), HttpStatus.NOT_ACCEPTABLE);
     }
 
     // 409
     @ExceptionHandler(StateConflictException.class)
     public ResponseEntity<Object> handleStateConflictException(StateConflictException ex) {
-        return handleExceptionInternal(ex, ex.getMessage(), new HttpHeaders(), HttpStatus.CONFLICT);
+        return handleExceptionInternal(ex, ex.getMessage(), HttpStatus.CONFLICT);
     }
 
     // 412
     @ExceptionHandler(PreconditionFailedException.class)
     public ResponseEntity<Object> handlePreconditionFailedException(PreconditionFailedException ex) {
 
-        var headers = new HttpHeaders();
-
+        HttpHeaders headers;
         if (ex.getUrl() != null && ex.getCurrentVersionUid() != null) {
+            headers = new HttpHeaders();
             headers.setETag("\"" + ex.getCurrentVersionUid() + "\"");
             headers.setLocation(URI.create(ex.getUrl()));
+        } else {
+            headers = HttpHeaders.EMPTY;
         }
 
-        return handleExceptionInternal(ex, ex.getMessage(), headers, HttpStatus.PRECONDITION_FAILED);
+        return handleExceptionInternal(ex, ex.getMessage(), HttpStatus.PRECONDITION_FAILED, headers);
     }
 
     // 415
     @ExceptionHandler({HttpMediaTypeNotSupportedException.class, UnsupportedMediaTypeException.class})
     public ResponseEntity<Object> handleUnsupportedMediaTypeException(UnsupportedMediaTypeException ex) {
-        return handleExceptionInternal(ex, ex.getMessage(), new HttpHeaders(), HttpStatus.UNSUPPORTED_MEDIA_TYPE);
+        return handleExceptionInternal(ex, ex.getMessage(), HttpStatus.UNSUPPORTED_MEDIA_TYPE);
     }
 
     // custom status
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<Object> handleSpringResponseStatusException(ResponseStatusException ex) {
         // rethrow will not work properly, so we handle it
-        return handleExceptionInternal(ex, ex.getReason(), ex.getResponseHeaders(), ex.getStatusCode());
+        return handleExceptionInternal(ex, ex.getReason(), ex.getStatusCode(), ex.getHeaders());
     }
 
     // 500 - general
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<Object> handleUncaughtException(Exception ex) {
+    public ResponseEntity<Object> handleOtherException(Exception ex) {
         var message = "An internal error has occurred. Please contact your administrator.";
-        return handleExceptionInternal(ex, message, new HttpHeaders(), HttpStatus.INTERNAL_SERVER_ERROR);
+        return handleExceptionInternal(ex, message, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+
+    private ResponseEntity<Object> handleExceptionInternal(Exception ex, String message, HttpStatusCode status) {
+        return handleExceptionInternal(ex, message, status, HttpHeaders.EMPTY);
     }
 
     private ResponseEntity<Object> handleExceptionInternal(
-            Exception ex, String message, HttpHeaders headers, HttpStatusCode status) {
-
+            Exception ex, String message, HttpStatusCode status, HttpHeaders headers) {
         if (status.is5xxServerError()) {
-            logger.error("", ex);
+            logger.error(ex.getMessage(), ex);
         } else {
             logger.warn(ex.getMessage());
             if (logger.isDebugEnabled()) {

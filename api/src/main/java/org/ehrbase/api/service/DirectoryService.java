@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 vitasystems GmbH and Hannover Medical School.
+ * Copyright (c) 2024 vitasystems GmbH.
  *
  * This file is part of project EHRbase
  *
@@ -7,7 +7,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     https://www.apache.org/licenses/LICENSE-2.0
+ *      https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,30 +22,34 @@ import com.nedap.archie.rm.support.identification.ObjectVersionId;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
-import javax.annotation.Nullable;
 
-public interface DirectoryService extends BaseService {
+public interface DirectoryService {
+
+    int EHR_DIRECTORY_FOLDER_IDX = 1;
 
     /**
      * Get the Folder for Ehr with id equal <code>ehrId</code>
+     *
      * @param ehrId
      * @param folderId if <code>null</code> latest version will be returned
-     * @param path optional return folder at <code>path</code>
+     * @param path     optional return folder at <code>path</code>
      * @return
      */
-    Optional<Folder> get(UUID ehrId, @Nullable ObjectVersionId folderId, @Nullable String path);
+    Optional<Folder> get(UUID ehrId, ObjectVersionId folderId, String path);
 
     /**
      * Get the Folder for Ehr with id equal <code>ehrId</code> for a specific point in time;
+     *
      * @param ehrId
      * @param time
-     * @param path optional return folder at <code>path</code>
+     * @param path  optional return folder at <code>path</code>
      * @return
      */
-    Optional<Folder> getByTime(UUID ehrId, OffsetDateTime time, @Nullable String path);
+    Optional<Folder> getByTime(UUID ehrId, OffsetDateTime time, String path);
 
     /**
-     *  Create a new folder for Ehr with id equal <code>ehrId</code>
+     * Create a new folder for Ehr with id equal <code>ehrId</code>
+     *
      * @param ehrId
      * @param folder
      * @return
@@ -54,6 +58,7 @@ public interface DirectoryService extends BaseService {
 
     /**
      * Update the folder for Ehr with id equal <code>ehrId</code>
+     *
      * @param ehrId
      * @param folder
      * @param ifMatches expected version before update for optimistic looking
@@ -63,6 +68,7 @@ public interface DirectoryService extends BaseService {
 
     /**
      * delete the folder for Ehr with id equal <code>ehrId</code>
+     *
      * @param ehrId
      * @param ifMatches expected version before delete for optimistic looking
      */
@@ -70,6 +76,7 @@ public interface DirectoryService extends BaseService {
 
     /**
      * Physical delete a folder with all History
+     *
      * @param ehrId
      * @param folderId
      */
